@@ -7,13 +7,9 @@
 #include <string>
 #include <ostream>
 
-// using zmq::context_t;
-// using zmq::socket_t;
-
-
 class Kernel {
 public:
-    Kernel( zmq::context_t &ctx, const std::string &ip)
+    Kernel( zmq::context_t &ctx, const uuid_t & kernelid, const std::string &ip)
         ;
 
     struct TCPInfo {
@@ -34,14 +30,18 @@ public:
         uint16_t iopub_port;
         std::string key;
 
-        std::ostream & json_stringify(std::ostream & os);
+        std::ostream & json_stringify(std::ostream & os) const;
 
     };
 
     void start();
-    void msg();
 
-    const TCPInfo & endpoint_info() ;
+    void message_loop();
+
+    const std::string & id() const;
+    const std::string & sessionid() const;
+
+    const TCPInfo & endpoint_info() const ;
 
 private:
     zmq::context_t &_ctx;
@@ -52,8 +52,12 @@ private:
     zmq::socket_t _iopub;
     zmq::socket_t _shell;
 
-
+    uuid_t _kernelid;
+    uuid_t _sessionid;
+    std::string _kernelid_string;
+    std::string _sessionid_string;
     TCPInfo _tcp_info;
+    bool _shutdown;
 };
 
 #endif
