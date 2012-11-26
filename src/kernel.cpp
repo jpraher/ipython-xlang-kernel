@@ -1,5 +1,6 @@
 
 #include "kernel.h"
+#include "ipython_message.h"
 #include <assert.h>
 #include <iostream>
 #include <fstream>
@@ -9,6 +10,15 @@
 #include <uuid/uuid.h>
 
 using zmq::socket_t;
+
+
+bool sockopt_rcvmore(zmq::socket_t & socket)
+{
+    int64_t rcvmore;
+    size_t type_size = sizeof(int64_t);
+    socket.getsockopt(ZMQ_RCVMORE, &rcvmore, &type_size);
+    return rcvmore ? true : false;
+}
 
 
 std::string _get_zmq_last_endpoint(socket_t & socket) {
@@ -87,40 +97,102 @@ std::istream & _uuid_parse(std::istream &is,
 
 }
 
-
-std::ostream & _json_stringify(const std::map<std::string, std::string> & obj,
-                               std::ostream & os)
-{
-    os << "{" << std::endl;
-    for (std::map<std::string, std::string>::const_iterator it = obj.begin();
-         it != obj.end();
-         ++it) {
-        if (it != obj.begin()) {
-            os << "," << std::endl;
-        }
-        os << "\t\"" << it->first << "\": " << it->second ;
-    }
-    os << std::endl << "}" << std::endl;
-
-    return os;
+Kernel::TCPInfo::TCPInfo() {
 }
 
-std::ostream & Kernel::TCPInfo::json_stringify(std::ostream & os) const {
-    std::map<std::string, std::string> atts;
-    atts.insert(std::make_pair("transport", "\"" + transport + "\""));
-    atts.insert(std::make_pair("ip", "\"" + ip + "\""));
-    atts.insert(std::make_pair("key", "\"" + key + "\""));
-    std::ostringstream oss;
-    oss << stdin_port;
-    atts.insert(std::make_pair("stdin_port", oss.str()));
-    oss.str(""); oss << hb_port ;
-    atts.insert(std::make_pair("hb_port", oss.str()));
-    oss.str(""); oss << iopub_port ;
-    atts.insert(std::make_pair("iopub_port", oss.str()));
-    oss.str(""); oss << shell_port ;
-    atts.insert(std::make_pair("shell_port", oss.str()));
+Kernel::TCPInfo::TCPInfo(const json::object_value & object)
+    : _data(object)
+{
+}
 
-    return _json_stringify(atts, os);
+
+const std::string &Kernel::TCPInfo::transport() const
+{
+    static const std::string EMPTY = "";
+    const std::string * v = _data.string("transport");
+    if (v) {
+        return *v;
+    }
+    return EMPTY;
+}
+void Kernel::TCPInfo::set_transport(const std::string & transport) {
+    _data.set_string("transport",transport);
+}
+
+const std::string & Kernel::TCPInfo::ip() const {
+    static const std::string EMPTY = "";
+    const std::string * v = _data.string("ip");
+    if (v) {
+        return *v;
+    }
+    return EMPTY;
+}
+void Kernel::TCPInfo::set_ip(const std::string & ip) {
+    _data.set_string("ip", ip);
+}
+
+uint16_t Kernel::TCPInfo::stdin_port() const {
+    const int64_t* v = _data.int64("stdin_port");
+    if (v) {
+        return *v;
+    }
+    return 0;
+}
+
+void Kernel::TCPInfo::set_stdin_port(uint16_t port) {
+    _data.set_int64("stdin_port", port);
+}
+
+uint16_t    Kernel::TCPInfo::hb_port() const {
+    const int64_t* v = _data.int64("stdin_port");
+    if (v) {
+        return *v;
+    }
+    return 0;
+}
+void Kernel::TCPInfo::set_hb_port(uint16_t port) {
+    _data.set_int64("hb_port", port);
+}
+
+uint16_t Kernel::TCPInfo::shell_port() const {
+    const int64_t* v = _data.int64("shell_port");
+    if (v) {
+        return *v;
+    }
+    return 0;
+}
+void Kernel::TCPInfo::set_shell_port(uint16_t port) {
+    _data.set_int64("shell_port", port);
+}
+
+uint16_t Kernel::TCPInfo::iopub_port() const {
+    const int64_t* v = _data.int64("iopub_port");
+    if (v) {
+        return *v;
+    }
+    return 0;
+}
+void Kernel::TCPInfo::set_iopub_port(uint16_t port) {
+    _data.set_int64("iopub_port", port);
+}
+
+const std::string & Kernel::TCPInfo::key() const {
+    static const std::string EMPTY = "";
+    const std::string * v = _data.string("ip");
+    if (v) {
+        return *v;
+    }
+    return EMPTY;
+
+}
+void Kernel::TCPInfo::set_key(const std::string & key)
+{
+    _data.set_string("key", key);
+}
+
+const json::object_value & Kernel::TCPInfo::json() const
+{
+    return _data;
 }
 
 
@@ -128,15 +200,7 @@ std::ostream & Kernel::TCPInfo::json_stringify(std::ostream & os) const {
  ident1,ident2,...,DELIM,p_header,p_parent,p_metadata,p_content,buffer1,buffer2,..]
  */
 
-
-struct Message {
-    uuid_t session_id;
-    std::string hmac;
-    std::string header_json;
-    std::string parent_json;
-    std::string metadata_json;
-    std::string content_json;
-};
+/*
 
 
 struct SessionMessageParser {
@@ -211,19 +275,20 @@ bool SessionMessageParser::parse(const char * data, size_t size) {
     return true;
 }
 
+*/
 
-
-Kernel::Kernel(zmq::context_t &ctx, const uuid_t & kernelid, const std::string &ip)
+Kernel::Kernel(zmq::context_t &ctx, const uuid_t & kernelid, const std::string &ip, MsgCallback * shell_handler)
     : _ctx(ctx),
       _hb(ctx, ZMQ_REP),
       _stdin(ctx, ZMQ_ROUTER),
       _iopub(ctx, ZMQ_PUB),
       _shell(ctx, ZMQ_ROUTER),
+      _shell_handler(shell_handler),
       _ip(ip),
       _shutdown(false)
 {
     uuid_copy(_kernelid, kernelid);
-    _tcp_info.ip = _ip;
+    _tcp_info.set_ip(_ip);
     std::ostringstream uuidstr;
     _uuid_stringify(_kernelid, uuidstr);
     _kernelid_string = uuidstr.str();
@@ -231,7 +296,7 @@ Kernel::Kernel(zmq::context_t &ctx, const uuid_t & kernelid, const std::string &
     uuidstr.str("");
     _uuid_stringify(_sessionid, uuidstr);
     _sessionid_string = uuidstr.str();
-    _tcp_info.key = _sessionid_string;
+    _tcp_info.set_key(_sessionid_string);
 }
 
 void Kernel::start() {
@@ -242,24 +307,52 @@ void Kernel::start() {
    _iopub.bind(ep.c_str());
    _shell.bind(ep.c_str());
 
-   const std::string hb_endpoint = _get_zmq_last_endpoint(_hb);
+   const std::string hb_endpoint    = _get_zmq_last_endpoint(_hb);
    const std::string stdin_endpoint = _get_zmq_last_endpoint(_stdin);
    const std::string iopub_endpoint = _get_zmq_last_endpoint(_iopub);
    const std::string shell_endpoint = _get_zmq_last_endpoint(_shell);
 
    // std::cout << "stdin endpoint: " << stdin_endpoint << std::endl;
    uint16_t port = 0;
-   _try_zmq_endpoint_get_port(hb_endpoint, _tcp_info.hb_port);
-   _try_zmq_endpoint_get_port(stdin_endpoint, _tcp_info.stdin_port);
-   _try_zmq_endpoint_get_port(iopub_endpoint, _tcp_info.iopub_port);
-   _try_zmq_endpoint_get_port(shell_endpoint, _tcp_info.shell_port);
+   _try_zmq_endpoint_get_port(hb_endpoint, port);
+   _tcp_info.set_hb_port(port);
+   port = 0;
+   _try_zmq_endpoint_get_port(stdin_endpoint, port);
+   _tcp_info.set_stdin_port(port);
+   port = 0;
+   _try_zmq_endpoint_get_port(iopub_endpoint, port);
+   _tcp_info.set_iopub_port(port);
+   port = 0;
+   _try_zmq_endpoint_get_port(shell_endpoint, port);
+   _tcp_info.set_shell_port(port);
 
+}
+
+
+void _receive(zmq::socket_t & socket, std::list<zmq::message_t*> *result) {
+    do {
+        zmq::message_t * msg = new zmq::message_t();
+        // TODO: error handling
+        socket.recv(msg);
+        result->push_back(msg);
+    } while (sockopt_rcvmore(socket));
+}
+
+void _send(zmq::socket_t & socket, std::list<zmq::message_t*> &msg_list) {
+    std::list<zmq::message_t*>::const_iterator last = --msg_list.end();
+    for (std::list<zmq::message_t*>::const_iterator it = msg_list.begin();
+         it != msg_list.end();
+         ++it) {
+        int flags = (it == last) ? 0 : ZMQ_SNDMORE;
+        // TODO: error handling
+        socket.send(*it, flags);
+    }
 }
 
 
 void Kernel::message_loop() {
 
-    SessionMessageParser message_parser;
+    //SessionMessageParser message_parser;
     do  {
         zmq::pollitem_t items [1];
         /* First item refers to ØMQ socket 'socket' */
@@ -269,8 +362,15 @@ void Kernel::message_loop() {
         int timeout = -1;
         int rc = zmq::poll(items, 1, timeout );
         if (rc >= 0) { //success
+            // TODO generalize on all sockets
             // number of events
             if (items[0].revents & ZMQ_POLLIN) {
+                std::list<zmq::message_t*> request;
+                std::list<zmq::message_t*> response;
+                _receive(_shell,&request);
+                _shell_handler->handle(request, &response);
+                _send(_shell, response);
+                /*
                 zmq::message_t msg;
                 _shell.recv(&msg);
                 if (!message_parser.parse((char*)msg.data(), msg.size())) {
@@ -284,6 +384,7 @@ void Kernel::message_loop() {
                     std::cout << "content: " << message_parser.message.content_json << std::endl;
                     message_parser = SessionMessageParser();
                 }
+                */
             }
         }
     } while (!_shutdown);
@@ -299,6 +400,34 @@ const std::string & Kernel::id() const  {
 }
 const std::string & Kernel::sessionid() const  {
     return _sessionid_string;
+}
+
+
+class PrintOutCallback : public MsgCallback{
+public:
+    virtual ~PrintOutCallback();
+    virtual void handle(const std::list<zmq::message_t*> &request_msg_list,
+                        std::list<zmq::message_t*> * response_msg_list);
+};
+
+
+PrintOutCallback::~PrintOutCallback() {}
+void PrintOutCallback::handle(const std::list<zmq::message_t*> &request_msg_list,
+                              std::list<zmq::message_t*> * response_msg_list) {
+
+    IPythonMessage request;
+    request.deserialize(request_msg_list);
+    /*
+
+     */
+    request.content.stringify(std::cout) << std::endl;
+
+    IPythonMessage response;
+
+    response.session_id = request.session_id;
+    response.hmac = request.hmac;
+
+    response.serialize(response_msg_list);
 }
 
 
@@ -329,26 +458,22 @@ int main(int argc, char** argv) {
         assert( os.str() == id );
     }
 
-    Kernel kernel(ctx, kernelid, ip);
+    PrintOutCallback shellCallback;
+    Kernel kernel(ctx, kernelid, ip, &shellCallback);
 
     try {
         kernel.start();
-        // kernel.write_file();
     } catch (const std::exception & e) {
         std::cerr << "error " << e.what() << std::endl;
     }
 
     std::ostringstream connectionfile;
     connectionfile << "kernel-" << kernel.id() << ".json";
-
     {
         std::ofstream fs(connectionfile.str().c_str());
-        kernel.endpoint_info().json_stringify(fs);
+        kernel.endpoint_info().json().stringify(fs);
     }
     std::cout << "wrote " << connectionfile.str() << std::endl;
-
-    // std::cout << "started " << kernel.id() << std::endl;
-    // std::cout << "started " << kernel.sessionid() << std::endl;
 
     kernel.message_loop();
 }

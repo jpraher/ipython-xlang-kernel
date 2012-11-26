@@ -6,37 +6,58 @@
 #include <stdint.h>
 #include <string>
 #include <ostream>
+#include "json.h"
+
+class MsgCallback {
+ public:
+    virtual ~MsgCallback() {}
+    virtual void handle(const std::list<zmq::message_t*> & request,
+                        std::list<zmq::message_t*> *response) = 0;
+};
+
 
 class Kernel {
 public:
-    Kernel( zmq::context_t &ctx, const uuid_t & kernelid, const std::string &ip)
+    Kernel( zmq::context_t &ctx,
+            const uuid_t & kernelid,
+            const std::string &ip,
+            MsgCallback * shellHandler)
         ;
 
     struct TCPInfo {
-        TCPInfo()
-        :   transport("tcp"),
-            stdin_port(0),
-            hb_port(0),
-            shell_port(0),
-            iopub_port(0)
-        {
-        }
+        TCPInfo();
+        TCPInfo(const json::object_value & object);
 
-        std::string transport;
-        std::string ip;
-        uint16_t stdin_port;
-        uint16_t    hb_port;
-        uint16_t shell_port;
-        uint16_t iopub_port;
-        std::string key;
+        const std::string &transport() const;
+        void set_transport(const std::string & transport);
 
-        std::ostream & json_stringify(std::ostream & os) const;
+        const std::string & ip() const;
+        void set_ip(const std::string & ip);
 
+        uint16_t stdin_port() const;
+        void set_stdin_port(uint16_t port);
+
+        uint16_t    hb_port() const;
+        void    set_hb_port(uint16_t port);
+
+        uint16_t shell_port() const;
+        void set_shell_port(uint16_t port);
+
+        uint16_t iopub_port() const;
+        void set_iopub_port(uint16_t port);
+
+        const std::string & key() const;
+        void set_key(const std::string & key);
+
+        const json::object_value & json() const;
+    private:
+        json::object_value _data;
     };
 
     void start();
 
     void message_loop();
+
 
     const std::string & id() const;
     const std::string & sessionid() const;
@@ -51,6 +72,7 @@ private:
     zmq::socket_t _stdin;
     zmq::socket_t _iopub;
     zmq::socket_t _shell;
+    MsgCallback *_shell_handler;
 
     uuid_t _kernelid;
     uuid_t _sessionid;

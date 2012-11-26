@@ -2,7 +2,7 @@
 #include "json.h"
 #include <iostream>
 #include <sstream>
-
+#include <cassert>
 namespace json {
 
 
@@ -30,6 +30,26 @@ namespace json {
             std::cout << "parsed root2" << std::endl;
             root2->stringify(std::cout) << std::endl;
         }
+
+
+        std::string json_test1 = "  {\n \"test\":  127 \n, \"array\": [   [],\n\"a\\\"\\\\a\"]} ";
+        std::istringstream is2(json_test1);
+        std::cout << is2.str() << std::endl;
+        std::cout << json_test1.size() << std::endl;
+        // std::cout << "'" << is2.get() << "'" << std::endl;
+        json::parser parser2(is2);
+        value * root3 = NULL;
+        if (parser2.parse(&root3) && root3) {
+            std::cout << "parsed root3" << std::endl;
+            root3->stringify(std::cout) << std::endl;
+        }
+        const object_value * o = root3->object();
+        assert(o != NULL);
+        assert(*o->int64("test") == 127);
+        assert(o->array("array") != NULL);
+        assert(o->array("array")->length() == 2);
+        assert(o->array("array")->string(1) != NULL);
+        assert(*o->array("array")->string(1) == "a\"\\a");
     }
 
 

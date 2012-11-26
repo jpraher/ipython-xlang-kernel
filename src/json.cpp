@@ -13,6 +13,19 @@ using json::object_value;
 
 using json::parser;
 
+int64_t *            value::mutable_int64()     { return NULL; }
+const int64_t *      value::int64() const       { return NULL; }
+double *             value::mutable_real()      { return NULL; }
+const double *       value::real() const        { return NULL; }
+std::string *        value::mutable_string()    { return NULL; }
+const std::string *  value::string() const      { return NULL; }
+array_value *        value::mutable_array()     { return NULL; }
+const array_value *  value::array() const       { return NULL; }
+object_value *       value::mutable_object()    { return NULL; }
+const object_value * value::object() const      { return NULL; }
+
+
+
 int64_value::int64_value()
     : _value(0)
 {
@@ -29,6 +42,10 @@ std::ostream & int64_value::stringify(std::ostream & os) const
     return os;
 }
 
+value * int64_value::clone() const {
+    return new int64_value(_value);
+}
+
 real_value::real_value()
     : _value(0)
 {
@@ -37,6 +54,10 @@ real_value::real_value()
 real_value::real_value(double v)
     : _value(v)
 {
+}
+
+value * real_value::clone() const {
+    return new real_value(_value);
 }
 
 std::ostream & real_value::stringify(std::ostream & os) const
@@ -50,6 +71,9 @@ string_value::string_value(const std::string &v)
 {
 }
 
+value * string_value::clone() const {
+    return new string_value(_value);
+}
 
 std::ostream & string_value::stringify(std::ostream & os) const
 {
@@ -70,6 +94,21 @@ std::ostream & string_value::stringify(std::ostream & os) const
     return os;
 }
 
+array_value::array_value() {
+}
+
+array_value::array_value(const array_value & that)
+    : _values(that._values.size())
+{
+    for (int i = 0; i < that._values.size(); i++) {
+        if (that._values[i] == NULL) {
+            _values[i] = NULL;
+        }
+        else {
+            _values[i] = that._values[i]->clone();
+        }
+    }
+}
 
 array_value::~array_value() {
     for (property_vector::iterator it = _values.begin();
@@ -212,12 +251,21 @@ const object_value * array_value::object(int el) const {
     return NULL;
 }
 
+int array_value::length() const {
+    return _values.size();
+}
+
 value ** array_value::mutable_slot(int el) {
 
     if (_values.size() <= el) {
         _values.resize(el + 1, NULL);
     }
     return &(_values[el]);
+}
+
+
+value * array_value::clone() const {
+    return new array_value(*this);
 }
 
 
@@ -239,6 +287,22 @@ std::ostream & array_value::stringify(std::ostream & os) const {
     }
     os << "]";
     return os;
+}
+
+object_value::object_value() {
+}
+
+object_value::object_value(const object_value & that) {
+    for (property_map::const_iterator it = that._values.begin();
+         it != that._values.end();
+         ++it) {
+        if (it->second == NULL) {
+            _values.insert(std::make_pair(it->first, (value*)NULL ));
+        }
+        else {
+            _values.insert(std::make_pair(it->first, it->second->clone()));
+        }
+    }
 }
 
 object_value::~object_value() {
@@ -391,6 +455,10 @@ const object_value * object_value::object(const std::string & name) const
     return NULL;
 }
 
+value * object_value::clone() const {
+    return new object_value(*this);
+}
+
 
 std::ostream & object_value::stringify(std::ostream & os) const {
     os << "{";
@@ -432,7 +500,6 @@ parser::token::~token()
 parser::token::token(Kind kind, int line, int col)
     : kind(kind), line(line), col(col), value(NULL)
 {
-
 }
 
 parser::parser(std::istream & is)
@@ -444,6 +511,8 @@ parser::parser(std::istream & is)
 }
 bool parser::next(token * tok) {
     *tok = _la;
+    // clear the value
+    _la.value = NULL;
     bool successful = _la_successful;
     _la_successful = _next(&_la);
     return successful;
@@ -468,7 +537,7 @@ bool parser::_next(token * tok) {
                 _col = -1;
             }
 
-            char c = _is.get();
+            c = _is.get();
             _col++;
         }
 
@@ -578,6 +647,8 @@ bool parser::parse_elements(array_value * array) {
                 std::cout << "elements: next failed  at " << _line << ", " << _col << std::endl;
                 return false;
             }
+            std::cout << "array: ";
+            array->stringify(std::cout) << std::endl;;
         }
 
         has_more = t.kind == token::COMMA;
@@ -633,6 +704,34 @@ bool parser::parse_properties(object_value * object) {
     return t.kind == token::RBRACE;
 }
 
+
+bool parser::parse(object_value * object) {
+    token t;
+    if (!next(&t)) {
+        std::cout << "next failed  at " << _line << ", " << _col << std::endl;
+        return false;
+    }
+    if (t.kind != token::LBRACE) {
+        std::cout << "expected {" << std::endl;
+        return false;
+    }
+    return parse_properties(object);
+}
+
+bool parser::parse(array_value * array) {
+    token t;
+    if (!next(&t)) {
+        std::cout << "next failed  at " << _line << ", " << _col << std::endl;
+        return false;
+    }
+    if (t.kind != token::LBRACKET) {
+        std::cout << "expected [" << std::endl;
+        return false;
+    }
+    return parse_elements(array);
+}
+
+
 bool parser::parse(value ** result) {
 
     token t;
@@ -656,6 +755,10 @@ bool parser::parse(value ** result) {
     }
     else {
         // take the value ownership.
+        if (t.value) {
+            std::cout << "value " ;
+            t.value->stringify(std::cout) << std::endl;;
+        }
         *result = t.value;
         t.value = NULL;
     }

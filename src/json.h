@@ -1,5 +1,6 @@
 
 #ifndef __json__h__
+#define __json__h__
 
 #include <map>
 #include <vector>
@@ -15,18 +16,20 @@ namespace json {
     // undefined ..
     class value {
     public:
-        virtual int64_t * mutable_int64()           { return NULL; }
-        virtual const int64_t * int64() const       { return NULL; }
-        virtual double * mutable_real()             { return NULL; }
-        virtual const double * real() const         { return NULL; }
-        virtual std::string * mutable_string()      { return NULL; }
-        virtual const std::string * string() const  { return NULL; }
-        virtual array_value * mutable_array()       { return NULL; }
-        virtual const array_value * array() const   { return NULL; }
-        virtual object_value * mutable_object()     { return NULL; }
-        virtual const object_value * object() const { return NULL; }
+        virtual int64_t * mutable_int64();
+        virtual const int64_t * int64() const;
+        virtual double * mutable_real();
+        virtual const double * real() const;
+        virtual std::string * mutable_string();
+        virtual const std::string * string() const;
+        virtual array_value * mutable_array();
+        virtual const array_value * array() const;
+        virtual object_value * mutable_object();
+        virtual const object_value * object() const;
 
+        virtual value * clone() const = 0;
         virtual std::ostream & stringify(std::ostream & os) const = 0;
+
     };
 
     class int64_value : public value {
@@ -40,7 +43,7 @@ namespace json {
         virtual int64_t * mutable_int64()           { return &_value; }
         virtual const int64_t * int64() const       { return &_value; }
         virtual std::ostream & stringify(std::ostream & os) const;
-
+        virtual value * clone() const;
     private:
         int64_t _value;
     };
@@ -56,6 +59,7 @@ namespace json {
         virtual double * mutable_real()           { return &_value; }
         virtual const double * real() const       { return &_value; }
         virtual std::ostream & stringify(std::ostream & os) const;
+        virtual value * clone() const;
     private:
         double _value;
     };
@@ -70,6 +74,7 @@ namespace json {
         virtual std::string * mutable_string()           { return &_value; }
         virtual const std::string * string() const       { return &_value; }
         virtual std::ostream & stringify(std::ostream & os) const;
+        virtual value * clone() const;
     private:
         std::string _value;
     };
@@ -79,6 +84,8 @@ namespace json {
         friend class object_value;
         typedef std::vector<value*> property_vector;
     public:
+        array_value();
+        explicit array_value(const array_value & that);
         virtual ~array_value();
         /*
         void set(int el, int64_t value);
@@ -98,11 +105,13 @@ namespace json {
         const object_value * object(int el) const;
 
         value ** mutable_slot(int el);
+        int length() const;
 
         virtual array_value * mutable_array()       { return this; }
         virtual const array_value * array() const   { return this; }
 
         virtual std::ostream & stringify(std::ostream & os) const;
+        virtual value * clone() const;
     private:
         value * _get(int el) const;
         void _put(int el, value* v);
@@ -116,6 +125,8 @@ namespace json {
         typedef std::map<std::string, value*> property_map;
 
     public:
+        object_value();
+        explicit object_value(const object_value & that);
         virtual ~object_value();
 
         // elements are nullable, undefined is NULL.
@@ -142,6 +153,7 @@ namespace json {
         value ** mutable_slot(const std::string & value);
 
         virtual std::ostream & stringify(std::ostream & os) const;
+        virtual value * clone() const;
     private:
         value* _find(const std::string & name) const;
         bool _delete(const std::string & name) ;
@@ -186,6 +198,10 @@ namespace json {
         bool next(parser::token * tok) ;
 
         bool parse(value** value);
+        bool parse(object_value * object);
+        bool parse(array_value * object);
+
+    private:
         bool parse_properties(object_value * object);
         bool parse_elements(array_value * array);
 
