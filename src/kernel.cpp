@@ -8,15 +8,18 @@
 #include <sstream>
 #include <map>
 #include <uuid/uuid.h>
+#include <glog/logging.h>
+#include <time.h>
 
 using zmq::socket_t;
 
 
 bool sockopt_rcvmore(zmq::socket_t & socket)
 {
-    int64_t rcvmore;
+    int64_t rcvmore = 0;
     size_t type_size = sizeof(int64_t);
     socket.getsockopt(ZMQ_RCVMORE, &rcvmore, &type_size);
+    // std::cout << rcvmore << std::endl;
     return rcvmore ? true : false;
 }
 
@@ -340,12 +343,13 @@ void _receive(zmq::socket_t & socket, std::list<zmq::message_t*> *result) {
 
 void _send(zmq::socket_t & socket, std::list<zmq::message_t*> &msg_list) {
     std::list<zmq::message_t*>::const_iterator last = --msg_list.end();
+    int i = 0;
     for (std::list<zmq::message_t*>::const_iterator it = msg_list.begin();
          it != msg_list.end();
          ++it) {
         int flags = (it == last) ? 0 : ZMQ_SNDMORE;
-        // TODO: error handling
-        socket.send(*it, flags);
+        DLOG(INFO) << "sending msg " << i++ << " flags " << flags;
+        socket.send(*(*it), flags);
     }
 }
 
@@ -367,10 +371,13 @@ void Kernel::message_loop() {
             if (items[0].revents & ZMQ_POLLIN) {
                 std::list<zmq::message_t*> request;
                 std::list<zmq::message_t*> response;
+                DLOG(INFO) << "receiving";
                 _receive(_shell,&request);
+                DLOG(INFO) << "received " << request.size() << std::endl;
                 _shell_handler->handle(request, &response);
+                DLOG(INFO) << "received " << request.size() << std::endl;
                 _send(_shell, response);
-                /*
+                 /*
                 zmq::message_t msg;
                 _shell.recv(&msg);
                 if (!message_parser.parse((char*)msg.data(), msg.size())) {
@@ -415,24 +422,75 @@ PrintOutCallback::~PrintOutCallback() {}
 void PrintOutCallback::handle(const std::list<zmq::message_t*> &request_msg_list,
                               std::list<zmq::message_t*> * response_msg_list) {
 
+    DLOG(INFO) << "PrintOutCallback::handle()";
+
     IPythonMessage request;
     request.deserialize(request_msg_list);
     /*
-
      */
-    request.content.stringify(std::cout) << std::endl;
+    std::cout << "REQUEST header>" <<  request.header.to_str() << std::endl;
+    std::cout << "REQUEST content>" <<  request.content.to_str() << std::endl;
+    std::cout << "REQUEST metadata>" <<  request.metadata.to_str() << std::endl;
 
     IPythonMessage response;
 
     response.session_id = request.session_id;
     response.hmac = request.hmac;
 
+    response.content.set_string("status", "ok");
+    response.content.set_int64("execution_count", 0);
+
+    // ok case
+    response.content.mutable_array("payload");
+    response.content.mutable_object("user_variables");
+    response.content.mutable_object("user_expressions");
+
+    // get millis since
+    response.metadata.set_boolean("dependencies_met", true);
+    // TODO set ident
+    response.metadata.set_string("engine", "ident");
+
+    time_t msnow = time((time_t*)NULL) * 1000;
+    response.metadata.set_int64("started",  msnow);
+    response.metadata.merge(request.metadata);
+
+    // always new msgid ...
+
+    response.metadata.set_string("status", "ok");
+    // {"date":"2012-11-27T21:55:17.543998","msg_id":"a9522f9c-f097-4921-9d28-35688bd7e32a","msg_type":"execute_request","session":"2efc817e-52d4-4945-aa36-93b755f238fb","username":"jakob","version":[0,14,0,"dev"]}
+
+    {
+        uuid_t msg_id;
+        uuid_generate(msg_id);
+        std::ostringstream oss;
+        _uuid_stringify(msg_id, oss);
+        response.header.set_string("msg_id",oss.str());
+    }
+    if (request.header.string("username")) {
+        response.header.set_string("username", *request.header.string("username"));
+    }
+    if (request.header.string("msg_type")) {
+        response.header.set_string("msg_type", *request.header.string("msg_type"));
+    }
+    if (request.header.string("session")) {
+        response.header.set_string("session", *request.header.string("session"));
+    }
+
+    response.parent.merge(request.header);
+    std::cout << "RESPONSE header  >" << response.header.to_str() << std::endl;
+    std::cout << "RESPONSE content >" << response.content.to_str() << std::endl;
+    std::cout << "RESPONSE metadata>" << response.metadata.to_str() << std::endl;
     response.serialize(response_msg_list);
+
+    // free values
 }
 
 
 
 int main(int argc, char** argv) {
+
+    google::InitGoogleLogging(argv[0]);
+
     int io_threads = 1;
     std::string ip = "127.0.0.1";
     zmq::context_t ctx(io_threads);
