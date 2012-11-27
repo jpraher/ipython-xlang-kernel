@@ -4,7 +4,10 @@
 #include <iostream>
 #include <sstream>
 
+#include <glog/logging.h>
+
 using json::value;
+using json::boolean_value;
 using json::int64_value;
 using json::real_value;
 using json::string_value;
@@ -13,6 +16,8 @@ using json::object_value;
 
 using json::parser;
 
+bool *            value::mutable_boolean()     { return NULL; }
+const bool *      value::boolean() const       { return NULL; }
 int64_t *            value::mutable_int64()     { return NULL; }
 const int64_t *      value::int64() const       { return NULL; }
 double *             value::mutable_real()      { return NULL; }
@@ -24,6 +29,31 @@ const array_value *  value::array() const       { return NULL; }
 object_value *       value::mutable_object()    { return NULL; }
 const object_value * value::object() const      { return NULL; }
 
+std::string value::to_str() const  {
+    std::ostringstream oss;
+    this->stringify(oss);
+    return oss.str();
+}
+
+boolean_value::boolean_value()
+    : _value(false)
+{
+}
+
+boolean_value::boolean_value(bool v)
+    : _value(v)
+{
+}
+
+std::ostream & boolean_value::stringify(std::ostream & os) const
+{
+    os << (_value ? "true" : "false");
+    return os;
+}
+
+value * boolean_value::clone() const {
+    return new boolean_value(_value);
+}
 
 
 int64_value::int64_value()
@@ -136,6 +166,30 @@ void array_value::_put(int el, value * value) {
     _values[el] = value;
 }
 
+void array_value::set_boolean(int el, bool val)
+{
+    value * v = _get(el);
+    if (v != NULL) {
+        if (v->mutable_boolean()) {
+            *(v->mutable_boolean()) = val;
+            return;
+        }
+        else {
+            delete v;
+        }
+    }
+    _put(el, new boolean_value(val));
+}
+
+const bool *   array_value::boolean(int el) const {
+    value * v = _get(el);
+    if (v != NULL) {
+        return v->boolean();
+    }
+    return NULL;
+}
+
+
 void array_value::set_int64(int el, int64_t val)
 {
     value * v = _get(el);
@@ -158,6 +212,9 @@ const int64_t *   array_value::int64(int el) const {
     }
     return NULL;
 }
+
+
+
 
 void array_value::set_real(int el, double val) {
     value * v = _get(el);
@@ -317,6 +374,27 @@ object_value::~object_value() {
     }
 }
 
+void object_value::merge(const object_value& that) {
+    for (property_map::const_iterator it = that._values.begin();
+         it != that._values.end();
+         ++it) {
+        property_map::iterator existing = _values.find(it->first);
+        if (existing != _values.end()) {
+            if (existing->second != NULL) {
+                delete existing->second;
+            }
+            _values.erase(existing);
+        }
+        if (it->second == NULL) {
+            _values.insert(std::make_pair(it->first, (value*)NULL ));
+        }
+        else {
+            _values.insert(std::make_pair(it->first, it->second->clone()));
+        }
+    }
+}
+
+
 value* object_value::_find(const std::string &name) const {
     property_map::const_iterator it = _values.find(name);
     if (it == _values.end()) {
@@ -327,6 +405,31 @@ value* object_value::_find(const std::string &name) const {
 
 bool object_value::_delete(const std::string &name)  {
     return _values.erase(name) > 0;
+}
+
+
+void object_value::set_boolean(const std::string & name, bool val)
+{
+    json::value* v = _find(name);
+    if (v != NULL) {
+        if (v->mutable_boolean()) {
+            *(v->mutable_boolean()) = val;
+            return;
+        }
+        else {
+            _delete(name);
+            delete v;
+        }
+    }
+    _values.insert(std::make_pair(name, new boolean_value(val)));
+}
+
+const bool * object_value::boolean(const std::string & name) const
+{
+    value * v = _find(name);
+    if (v != NULL)
+        return v->boolean();
+    return NULL;
 }
 
 void object_value::set_int64(const std::string & name, int64_t val)
@@ -558,6 +661,26 @@ bool parser::_next(token * tok) {
             // error
             return false;
         }
+        else if (c == 't') {  // true
+            if (_is.get() == 'r' && _is.get() == 'u' && _is.get() == 'e' && _is.good()) {
+                *tok = token(token::BOOLEAN, _line, _col);
+                tok->value = new boolean_value(true);
+                _col += 3;
+                return true;
+            }
+            // error
+            return false;
+        }
+        else if (c == 'f') {  // true
+            if (_is.get() == 'a' && _is.get() == 'l' && _is.get() == 's' &&  _is.get() == 'e' &&_is.good()) {
+                *tok = token(token::BOOLEAN, _line, _col);
+                tok->value = new boolean_value(false);
+                _col += 4;
+                return true;
+            }
+            // error
+            return false;
+        }
         else if (c == '"') {
             int col = _col;
             std::stringstream result;
@@ -625,7 +748,7 @@ bool parser::_next(token * tok) {
 }
 
 bool parser::parse_elements(array_value * array) {
-    std::cout << "enter parse_elements" << std::endl;
+    DLOG(INFO) << "enter parse_elements";
     bool has_more = false;
     int el = -1;
     token t;
@@ -640,21 +763,20 @@ bool parser::parse_elements(array_value * array) {
         else if (_la.kind != token::COMMA) {
             value ** value_store = array->mutable_slot(el);
             if (!parse(value_store)) {
-                std::cout << "elements: parse failed  at " << _line << ", " << _col << std::endl;
+                LOG(WARNING) << "elements: parse failed  at " << _line << ", " << _col;
                 return false;
             }
             if (!next(&t)) {
-                std::cout << "elements: next failed  at " << _line << ", " << _col << std::endl;
+                LOG(WARNING) << "elements: next failed  at " << _line << ", " << _col;
                 return false;
             }
-            std::cout << "array: ";
-            array->stringify(std::cout) << std::endl;;
+            DLOG(INFO) << "array: " <<  array->to_str();
         }
 
         has_more = t.kind == token::COMMA;
 
     } while (has_more);
-    std::cout << "properties " << el << std::endl;
+    DLOG(INFO) << "array size: " << el;
     return t.kind == token::RBRACKET;
 
 }
@@ -664,7 +786,7 @@ bool parser::parse_properties(object_value * object) {
     do  {
 
         if (!next(&t)) {
-            std::cout << "properties: next failed  at " << _line << ", " << _col << std::endl;
+            LOG(WARNING) << "properties: next failed  at " << _line << ", " << _col;
             return false;
         }
         else if (t.kind == token::RBRACE) {
@@ -672,29 +794,29 @@ bool parser::parse_properties(object_value * object) {
         }
 
         if (t.kind != token::STRING) {
-            std::cout << "expected string" << std::endl;
+            LOG(WARNING) << "expected string" ;
             return false;
         }
 
         std::string prop = *(t.value->string());
 
         if (!next(&t)) {
-            std::cout << "properties: next failed  at " << _line << ", " << _col << std::endl;
+            LOG(WARNING) << "properties: next failed  at " << _line << ", " << _col;
             return false;
         }
         else if (t.kind != token::COL) {
-            std::cout << "expected :" << std::endl;
+            LOG(WARNING) << "expected ':'" << ", obtained " << t.kind;
             return false;
         }
 
         value ** value_store = object->mutable_slot(prop);
         if (!parse(value_store)) {
-            std::cout << "properties: parse " << prop <<" failed  at " << _line << ", " << _col << std::endl;
+            LOG(WARNING) << "properties: parse " << prop <<" failed  at " << _line << ", " << _col;
             return false;
         }
 
         if (!next(&t)) {
-            std::cout << "properties: next failed  at " << _line << ", " << _col << std::endl;
+            LOG(WARNING) << "properties: next failed  at " << _line << ", " << _col;
             return false;
         }
         has_more = t.kind == token::COMMA;
@@ -708,11 +830,11 @@ bool parser::parse_properties(object_value * object) {
 bool parser::parse(object_value * object) {
     token t;
     if (!next(&t)) {
-        std::cout << "next failed  at " << _line << ", " << _col << std::endl;
+        LOG(WARNING) << "next failed  at " << _line << ", " << _col;
         return false;
     }
     if (t.kind != token::LBRACE) {
-        std::cout << "expected {" << std::endl;
+        LOG(WARNING) << "expected {" ;
         return false;
     }
     return parse_properties(object);
@@ -721,11 +843,11 @@ bool parser::parse(object_value * object) {
 bool parser::parse(array_value * array) {
     token t;
     if (!next(&t)) {
-        std::cout << "next failed  at " << _line << ", " << _col << std::endl;
+        LOG(WARNING) << "next failed  at " << _line << ", " << _col;
         return false;
     }
     if (t.kind != token::LBRACKET) {
-        std::cout << "expected [" << std::endl;
+        LOG(WARNING) << "expected [";
         return false;
     }
     return parse_elements(array);
@@ -736,7 +858,7 @@ bool parser::parse(value ** result) {
 
     token t;
     if (!next(&t)) {
-        std::cout << "next failed  at " << _line << ", " << _col << std::endl;
+        LOG(WARNING) << "next failed  at " << _line << ", " << _col ;
         return false;
     }
     if (t.kind == token::LBRACE) {
@@ -756,8 +878,7 @@ bool parser::parse(value ** result) {
     else {
         // take the value ownership.
         if (t.value) {
-            std::cout << "value " ;
-            t.value->stringify(std::cout) << std::endl;;
+            LOG(INFO) << "parsed value: " << t.value->to_str();
         }
         *result = t.value;
         t.value = NULL;

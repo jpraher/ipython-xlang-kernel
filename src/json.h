@@ -18,6 +18,8 @@ namespace json {
     public:
         virtual int64_t * mutable_int64();
         virtual const int64_t * int64() const;
+        virtual bool * mutable_boolean();
+        virtual const bool * boolean() const;
         virtual double * mutable_real();
         virtual const double * real() const;
         virtual std::string * mutable_string();
@@ -29,7 +31,7 @@ namespace json {
 
         virtual value * clone() const = 0;
         virtual std::ostream & stringify(std::ostream & os) const = 0;
-
+        std::string    to_str() const;
     };
 
     class int64_value : public value {
@@ -47,6 +49,23 @@ namespace json {
     private:
         int64_t _value;
     };
+
+    class boolean_value : public value {
+        friend class array_value;
+        friend class object_value;
+    public:
+        boolean_value();
+        boolean_value(bool v);
+    public:
+        virtual ~boolean_value() {}
+        virtual bool * mutable_boolean()           { return &_value; }
+        virtual const bool * boolean() const       { return &_value; }
+        virtual std::ostream & stringify(std::ostream & os) const;
+        virtual value * clone() const;
+    private:
+        bool _value;
+    };
+
 
     class real_value : public value {
         friend class array_value;
@@ -92,6 +111,8 @@ namespace json {
         void set(int el, double value);
         void set(int el, const std::string & value);
         */
+        void set_boolean(int el, bool value);
+        const bool * boolean(int el) const;
         void set_int64(int el, int64_t value);
         const int64_t *   int64(int el) const;
         void set_real(int el, double value);
@@ -135,7 +156,8 @@ namespace json {
            void set(const std::string & name, double value);
            void set(const std::string & name, const std::string & value);
         */
-
+        void set_boolean(const std::string & name, bool value);
+        const bool * boolean(const std::string & name) const;
         void set_int64(const std::string & name, int64_t value);
         const int64_t * int64(const std::string & name) const;
         void set_real(const std::string & name, double value);
@@ -149,6 +171,8 @@ namespace json {
 
         virtual object_value * mutable_object()       { return this; }
         virtual const object_value * object() const   { return this; }
+
+        void merge(const object_value & value);
 
         value ** mutable_slot(const std::string & value);
 
@@ -172,7 +196,8 @@ namespace json {
                 INT = 2,
                 REAL = 3,
                 STRING = 4,
-                EOF_ = 5,
+                BOOLEAN = 5,
+                EOF_ = 6,
                 LBRACE = '{',
                 RBRACE = '}',
                 LBRACKET = '[',

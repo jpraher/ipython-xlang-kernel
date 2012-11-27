@@ -3,6 +3,8 @@
 #include <iostream>
 #include <sstream>
 #include <cassert>
+#include <glog/logging.h>
+
 namespace json {
 
 
@@ -14,6 +16,7 @@ namespace json {
         root.set_int64("int", 7);
         root.set_real("fl\"oat", 7.0);
         root.set_string("str", "test");
+        root.set_boolean("o", true);
         object_value * sub_object = root.mutable_object("obj");
         sub_object->set_int64("int", 7);
         array_value * sub_array = root.mutable_array("test");
@@ -32,7 +35,7 @@ namespace json {
         }
 
 
-        std::string json_test1 = "  {\n \"test\":  127 \n, \"array\": [   [],\n\"a\\\"\\\\a\"]} ";
+        std::string json_test1 = "  {\n \"test\":  127 \n, \"array\": [   [],\n\"a\\\"\\\\a\", true]} ";
         std::istringstream is2(json_test1);
         std::cout << is2.str() << std::endl;
         std::cout << json_test1.size() << std::endl;
@@ -47,14 +50,18 @@ namespace json {
         assert(o != NULL);
         assert(*o->int64("test") == 127);
         assert(o->array("array") != NULL);
-        assert(o->array("array")->length() == 2);
+        assert(o->array("array")->length() == 3);
         assert(o->array("array")->string(1) != NULL);
         assert(*o->array("array")->string(1) == "a\"\\a");
+        assert(o->array("array")->boolean(2) != NULL);
+        assert(*o->array("array")->boolean(2));
     }
 
 
 }
 
-int main() {
+int main(int argc, char** argv) {
+    google::InitGoogleLogging(argv[0]);
     json::testBuildSimple();
+
 }
