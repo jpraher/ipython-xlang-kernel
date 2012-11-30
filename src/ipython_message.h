@@ -16,7 +16,7 @@ public:
     json::object_value metadata;
     json::object_value content;
 
-    bool serialize(std::list<zmq::message_t*> *messages) const;
+    bool serialize(const std::string & key, std::list<zmq::message_t*> *messages) const;
     bool deserialize(const std::list<zmq::message_t*> & messages);
 
 };

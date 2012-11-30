@@ -7,6 +7,30 @@
 #include <string>
 #include <ostream>
 #include "json.h"
+#include "tthread/tinythread.h"
+
+template <typename T>
+struct delegate_t {
+    //    typedefdelegate_t(T*, pmf_t);
+    // pmf_t
+
+    typedef void (T::*pmf_t)();
+
+    delegate_t(T* that_, pmf_t mf_)
+        : that(that_), mf(mf_)
+    {
+    }
+
+    T* that;
+    pmf_t mf;
+
+    static void dispatch(void * data) {
+        assert(data != NULL);
+        delegate_t<T>* p = reinterpret_cast<delegate_t<T>*>(data);
+        (p->that->*(p->mf))();
+    }
+};
+
 
 class MsgCallback {
  public:
@@ -21,6 +45,7 @@ public:
     Kernel( zmq::context_t &ctx,
             const uuid_t & kernelid,
             const std::string &ip,
+            const std::string &key,
             MsgCallback * shellHandler)
         ;
 
@@ -55,12 +80,13 @@ public:
     };
 
     void start();
+    void start2();
 
     void message_loop();
-
+    void run_heartbeat();
 
     const std::string & id() const;
-    const std::string & sessionid() const;
+    const std::string & key() const;
 
     const TCPInfo & endpoint_info() const ;
 
@@ -75,11 +101,14 @@ private:
     MsgCallback *_shell_handler;
 
     uuid_t _kernelid;
-    uuid_t _sessionid;
+    uuid_t _hmackey;
     std::string _kernelid_string;
-    std::string _sessionid_string;
+    std::string _hmackey_string;
     TCPInfo _tcp_info;
     bool _shutdown;
+    size_t _hb_count;
+    tthread::thread * _hb_thread;
+    delegate_t<Kernel> *_run_hb_delegate;
 };
 
 #endif

@@ -1,6 +1,8 @@
 
 #include "ipython_message.h"
+#include "hmac.h"
 #include <sstream>
+#include <glog/logging.h>
 
 
 // IPythonMessage::IPythonMessage() {
@@ -8,37 +10,62 @@
 
 const char * IPythonMessage::DELIM = "<IDS|MSG>";
 
-zmq::message_t * convert(std::string s) {
+zmq::message_t * convert(const std::string & s) {
     char *buf = new char[s.size()];
     memcpy(buf, s.data(), s.size());
     return new zmq::message_t((void*)buf, s.size(), NULL);
 }
 
-bool IPythonMessage::serialize(std::list<zmq::message_t*> *messages) const {
 
-    messages->push_back(convert(session_id));
-    messages->push_back(convert(DELIM));
-    messages->push_back(convert(hmac));
+bool IPythonMessage::serialize(const std::string & key, std::list<zmq::message_t*> *messages) const {
+
+    md::hmac_ctx_t ctx;
+    md::HMAC hmac_(ctx, key);
+
     {
         std::ostringstream os;
         header.stringify(os);
-        messages->push_back(convert(os.str()));
+        std::string data = os.str();
+        messages->push_back(convert(data));
+        hmac_.update(data);
     }
     {
         std::ostringstream os;
         parent.stringify(os);
-        messages->push_back(convert(os.str()));
+        std::string data = os.str();
+        messages->push_back(convert(data));
+        hmac_.update(data);
     }
     {
         std::ostringstream os;
         metadata.stringify(os);
-        messages->push_back(convert(os.str()));
+        std::string data = os.str();
+        messages->push_back(convert(data));
+        hmac_.update(data);
     }
     {
         std::ostringstream os;
         content.stringify(os);
-        messages->push_back(convert(os.str()));
+        std::string data = os.str();
+        messages->push_back(convert(data));
+        hmac_.update(data);
     }
+
+    {
+        std::string hmac_md;
+        std::ostringstream oss;
+        hmac_.final(&hmac_md);
+        oss << std::hex;
+        for (size_t i = 0; i < hmac_md.size(); i++) {
+            oss.fill('0'); oss.width(2);
+            oss << (0xff & (unsigned int)hmac_md[i]);
+        }
+        DLOG(INFO) << "hmac hex encoded " << oss.str();
+        messages->push_front(convert(oss.str()));
+    }
+
+    messages->push_front(convert(DELIM));
+    messages->push_front(convert(session_id));
 }
 
 bool IPythonMessage::deserialize(const std::list<zmq::message_t*> & messages) {

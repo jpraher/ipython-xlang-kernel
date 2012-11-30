@@ -1,6 +1,9 @@
 
 #include "kernel.h"
 #include "ipython_message.h"
+#include "hmac.h"
+#include "tthread/tinythread.h"
+
 #include <assert.h>
 #include <iostream>
 #include <fstream>
@@ -11,8 +14,9 @@
 #include <glog/logging.h>
 #include <time.h>
 
-using zmq::socket_t;
 
+using zmq::socket_t;
+using tthread::thread;
 
 bool sockopt_rcvmore(zmq::socket_t & socket)
 {
@@ -280,26 +284,26 @@ bool SessionMessageParser::parse(const char * data, size_t size) {
 
 */
 
-Kernel::Kernel(zmq::context_t &ctx, const uuid_t & kernelid, const std::string &ip, MsgCallback * shell_handler)
+Kernel::Kernel(zmq::context_t &ctx, const uuid_t & kernelid, const std::string &ip, const std::string &hmac_key, MsgCallback * shell_handler)
     : _ctx(ctx),
       _hb(ctx, ZMQ_REP),
       _stdin(ctx, ZMQ_ROUTER),
       _iopub(ctx, ZMQ_PUB),
       _shell(ctx, ZMQ_ROUTER),
+      _hmackey_string(hmac_key),
       _shell_handler(shell_handler),
       _ip(ip),
-      _shutdown(false)
+      _shutdown(false),
+      _hb_count(0),
+      _hb_thread(NULL),
+      _run_hb_delegate(NULL)
 {
     uuid_copy(_kernelid, kernelid);
     _tcp_info.set_ip(_ip);
     std::ostringstream uuidstr;
     _uuid_stringify(_kernelid, uuidstr);
     _kernelid_string = uuidstr.str();
-    uuid_generate(_sessionid);
-    uuidstr.str("");
-    _uuid_stringify(_sessionid, uuidstr);
-    _sessionid_string = uuidstr.str();
-    _tcp_info.set_key(_sessionid_string);
+    _tcp_info.set_key(_hmackey_string);
 }
 
 void Kernel::start() {
@@ -354,6 +358,18 @@ void _send(zmq::socket_t & socket, std::list<zmq::message_t*> &msg_list) {
 }
 
 
+void Kernel::start2() {
+    delegate_t<Kernel> * _run_hb_delegate = new delegate_t<Kernel>(this, &Kernel::run_heartbeat);
+    _hb_thread = new thread(_run_hb_delegate->dispatch, _run_hb_delegate);
+}
+
+
+void Kernel::run_heartbeat() {
+    DLOG(INFO) << "entering heartbeat run loop.";
+    zmq_device(ZMQ_FORWARDER, _hb, _hb);
+    DLOG(INFO) << "leaving heartbeat run loop.";
+}
+
 void Kernel::message_loop() {
 
     //SessionMessageParser message_parser;
@@ -362,6 +378,8 @@ void Kernel::message_loop() {
         /* First item refers to ØMQ socket 'socket' */
         items[0].socket = _shell;
         items[0].events = ZMQ_POLLIN;
+        // items[1].socket = _hb;
+        // items[1].events = ZMQ_POLLIN;
 
         int timeout = -1;
         int rc = zmq::poll(items, 1, timeout );
@@ -377,21 +395,6 @@ void Kernel::message_loop() {
                 _shell_handler->handle(request, &response);
                 DLOG(INFO) << "received " << request.size() << std::endl;
                 _send(_shell, response);
-                 /*
-                zmq::message_t msg;
-                _shell.recv(&msg);
-                if (!message_parser.parse((char*)msg.data(), msg.size())) {
-                    std::cout << "failed to parse!" << std::endl;
-                    std::cout << "received " << msg.size() << " bytes" << std::endl;
-                    std::cout << "data:  " << std::string((char*)msg.data(), msg.size()) << std::endl;
-                }
-                else if (message_parser.is_complete()) {
-                    std::cout << "completed parsing!" << std::endl;
-                    std::cout << "now dispatch." << std::endl;
-                    std::cout << "content: " << message_parser.message.content_json << std::endl;
-                    message_parser = SessionMessageParser();
-                }
-                */
             }
         }
     } while (!_shutdown);
@@ -405,18 +408,25 @@ const Kernel::TCPInfo & Kernel::endpoint_info() const {
 const std::string & Kernel::id() const  {
     return _kernelid_string;
 }
-const std::string & Kernel::sessionid() const  {
-    return _sessionid_string;
+const std::string & Kernel::key() const  {
+    return _hmackey_string;
 }
 
 
 class PrintOutCallback : public MsgCallback{
 public:
+    PrintOutCallback(const std::string & key);
     virtual ~PrintOutCallback();
     virtual void handle(const std::list<zmq::message_t*> &request_msg_list,
                         std::list<zmq::message_t*> * response_msg_list);
+private:
+    std::string _key;
 };
 
+PrintOutCallback::PrintOutCallback(const std::string & binkey)
+    : _key(binkey)
+{
+}
 
 PrintOutCallback::~PrintOutCallback() {}
 void PrintOutCallback::handle(const std::list<zmq::message_t*> &request_msg_list,
@@ -480,7 +490,8 @@ void PrintOutCallback::handle(const std::list<zmq::message_t*> &request_msg_list
     std::cout << "RESPONSE header  >" << response.header.to_str() << std::endl;
     std::cout << "RESPONSE content >" << response.content.to_str() << std::endl;
     std::cout << "RESPONSE metadata>" << response.metadata.to_str() << std::endl;
-    response.serialize(response_msg_list);
+
+    response.serialize(_key, response_msg_list);
 
     // free values
 }
@@ -516,11 +527,24 @@ int main(int argc, char** argv) {
         assert( os.str() == id );
     }
 
-    PrintOutCallback shellCallback;
-    Kernel kernel(ctx, kernelid, ip, &shellCallback);
+
+    std::string key_string;
+    std::string key_bin;
+    {
+        uuid_t key;
+        uuid_generate(key);
+        key_bin = std::string((char*)key, sizeof(key));
+        std::ostringstream uuidstr;
+        _uuid_stringify(key, uuidstr);
+        key_string = uuidstr.str();
+    }
+
+    PrintOutCallback shellCallback(key_string);
+    Kernel kernel(ctx, kernelid, ip, key_string,  &shellCallback);
 
     try {
         kernel.start();
+        kernel.start2();
     } catch (const std::exception & e) {
         std::cerr << "error " << e.what() << std::endl;
     }
