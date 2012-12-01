@@ -4,10 +4,13 @@
 
 #include "json.h"
 #include <zmq.hpp>
+#include "message.h"
 
-class IPythonMessage {
+class IPythonMessage : public Message {
 public:
     static const char * DELIM;
+
+    virtual ~IPythonMessage() ;
 
     std::string session_id;
     std::string hmac;
@@ -16,8 +19,9 @@ public:
     json::object_value metadata;
     json::object_value content;
 
-    bool serialize(const std::string & key, std::list<zmq::message_t*> *messages) const;
-    bool deserialize(const std::list<zmq::message_t*> & messages);
+    // serialization, deserialization
+    virtual bool serialize(const std::string & key, std::list<zmq::message_t*> *messages) const;
+    virtual bool deserialize(const std::list<zmq::message_t*> & messages);
 
 };
 

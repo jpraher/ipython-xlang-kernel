@@ -6,8 +6,11 @@
 #include <stdint.h>
 #include <string>
 #include <ostream>
-#include "json.h"
 #include "tthread/tinythread.h"
+#include "json.h"
+#include "message.h"
+
+
 
 template <typename T>
 struct delegate_t {
@@ -35,10 +38,20 @@ struct delegate_t {
 class MsgCallback {
  public:
     virtual ~MsgCallback() {}
+
     virtual void handle(const std::list<zmq::message_t*> & request,
                         std::list<zmq::message_t*> *response) = 0;
 };
 
+
+class SocketChannel : public Channel {
+ public:
+    SocketChannel(zmq::socket_t & socket, const std::string & key);
+    virtual void send(const Message & message);
+ private:
+    zmq::socket_t * _socket;
+    std::string _key;
+};
 
 class Kernel {
 public:
@@ -46,7 +59,7 @@ public:
             const uuid_t & kernelid,
             const std::string &ip,
             const std::string &key,
-            MsgCallback * shellHandler)
+            ExecuteHandler * shellHandler)
         ;
 
     struct TCPInfo {
@@ -98,7 +111,12 @@ private:
     zmq::socket_t _stdin;
     zmq::socket_t _iopub;
     zmq::socket_t _shell;
-    MsgCallback *_shell_handler;
+    SocketChannel _stdinChannel,
+                  _iopubChannel,
+                  _shellChannel;
+
+    ExecuteHandler *_shell_handler;
+    // MsgCallback *_shell_handler;
 
     uuid_t _kernelid;
     uuid_t _hmackey;

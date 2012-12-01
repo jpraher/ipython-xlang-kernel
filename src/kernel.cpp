@@ -28,6 +28,42 @@ bool sockopt_rcvmore(zmq::socket_t & socket)
 }
 
 
+void _send(zmq::socket_t & socket, std::list<zmq::message_t*> &msg_list) {
+    std::list<zmq::message_t*>::const_iterator last = --msg_list.end();
+    int i = 0;
+    for (std::list<zmq::message_t*>::const_iterator it = msg_list.begin();
+         it != msg_list.end();
+         ++it) {
+        int flags = (it == last) ? 0 : ZMQ_SNDMORE;
+        DLOG(INFO) << "sending msg " << i++ << " flags " << flags;
+        socket.send(*(*it), flags);
+    }
+}
+
+SocketChannel::SocketChannel(zmq::socket_t & sock, const std::string &key)
+    : _socket(&sock),
+      _key(key)
+{
+}
+
+void SocketChannel::send(const Message & message) {
+    assert(_socket);
+
+    std::list<zmq::message_t*> msg_list;
+    message.serialize(_key, &msg_list);
+    _send(*_socket, msg_list);
+    // free messages
+    for (std::list<zmq::message_t*>::iterator it = msg_list.begin();
+         it != msg_list.end();
+         ++it) {
+        if (*it) delete *it;
+        *it = NULL;
+    }
+}
+
+
+
+
 std::string _get_zmq_last_endpoint(socket_t & socket) {
     char buf[512];
     size_t buf_size = sizeof(buf);
@@ -284,13 +320,16 @@ bool SessionMessageParser::parse(const char * data, size_t size) {
 
 */
 
-Kernel::Kernel(zmq::context_t &ctx, const uuid_t & kernelid, const std::string &ip, const std::string &hmac_key, MsgCallback * shell_handler)
+Kernel::Kernel(zmq::context_t &ctx, const uuid_t & kernelid, const std::string &ip, const std::string &hmac_key, ExecuteHandler * shell_handler)
     : _ctx(ctx),
       _hb(ctx, ZMQ_REP),
       _stdin(ctx, ZMQ_ROUTER),
       _iopub(ctx, ZMQ_PUB),
       _shell(ctx, ZMQ_ROUTER),
       _hmackey_string(hmac_key),
+      _stdinChannel(_stdin, hmac_key),
+      _iopubChannel(_iopub, hmac_key),
+      _shellChannel(_shell, hmac_key),
       _shell_handler(shell_handler),
       _ip(ip),
       _shutdown(false),
@@ -345,17 +384,6 @@ void _receive(zmq::socket_t & socket, std::list<zmq::message_t*> *result) {
     } while (sockopt_rcvmore(socket));
 }
 
-void _send(zmq::socket_t & socket, std::list<zmq::message_t*> &msg_list) {
-    std::list<zmq::message_t*>::const_iterator last = --msg_list.end();
-    int i = 0;
-    for (std::list<zmq::message_t*>::const_iterator it = msg_list.begin();
-         it != msg_list.end();
-         ++it) {
-        int flags = (it == last) ? 0 : ZMQ_SNDMORE;
-        DLOG(INFO) << "sending msg " << i++ << " flags " << flags;
-        socket.send(*(*it), flags);
-    }
-}
 
 
 void Kernel::start2() {
@@ -373,6 +401,7 @@ void Kernel::run_heartbeat() {
 void Kernel::message_loop() {
 
     //SessionMessageParser message_parser;
+    EContext ctx(_iopubChannel, _shellChannel);
     do  {
         zmq::pollitem_t items [1];
         /* First item refers to ØMQ socket 'socket' */
@@ -388,13 +417,11 @@ void Kernel::message_loop() {
             // number of events
             if (items[0].revents & ZMQ_POLLIN) {
                 std::list<zmq::message_t*> request;
-                std::list<zmq::message_t*> response;
+                // std::list<zmq::message_t*> response;
                 DLOG(INFO) << "receiving";
                 _receive(_shell,&request);
                 DLOG(INFO) << "received " << request.size() << std::endl;
-                _shell_handler->handle(request, &response);
-                DLOG(INFO) << "received " << request.size() << std::endl;
-                _send(_shell, response);
+                _shell_handler->execute(ctx, request);
             }
         }
     } while (!_shutdown);
@@ -413,29 +440,45 @@ const std::string & Kernel::key() const  {
 }
 
 
-class PrintOutCallback : public MsgCallback{
+class PrintOutCallback : public ExecuteHandler{
 public:
-    PrintOutCallback(const std::string & key);
+    PrintOutCallback();
     virtual ~PrintOutCallback();
-    virtual void handle(const std::list<zmq::message_t*> &request_msg_list,
-                        std::list<zmq::message_t*> * response_msg_list);
+
+
+    virtual void execute(EContext & ctx,
+                         std::list<zmq::message_t*> & request);
 private:
-    std::string _key;
+    size_t _execution_count;
 };
 
-PrintOutCallback::PrintOutCallback(const std::string & binkey)
-    : _key(binkey)
+PrintOutCallback::PrintOutCallback()
+    : _execution_count(0)
 {
 }
 
 PrintOutCallback::~PrintOutCallback() {}
-void PrintOutCallback::handle(const std::list<zmq::message_t*> &request_msg_list,
-                              std::list<zmq::message_t*> * response_msg_list) {
 
+
+void PrintOutCallback::execute(EContext & ctx,
+                               std::list<zmq::message_t*> &request_msg_list)
+{
     DLOG(INFO) << "PrintOutCallback::handle()";
 
     IPythonMessage request;
     request.deserialize(request_msg_list);
+    Message::free(request_msg_list);
+
+    const std::string *codePtr = request.content.string("code");
+    std::string code;
+    if (codePtr) {
+        code = *codePtr;
+    }
+    // trivial RTrim
+    while (code.size() > 0 && isspace(code[code.size() - 1])) {
+        code = code.substr(0, code.size() - 1);
+    }
+
     /*
      */
     std::cout << "REQUEST header>" <<  request.header.to_str() << std::endl;
@@ -445,10 +488,8 @@ void PrintOutCallback::handle(const std::list<zmq::message_t*> &request_msg_list
     IPythonMessage response;
 
     response.session_id = request.session_id;
-    response.hmac = request.hmac;
-
     response.content.set_string("status", "ok");
-    response.content.set_int64("execution_count", 0);
+    response.content.set_int64("execution_count", ++_execution_count);
 
     // ok case
     response.content.mutable_array("payload");
@@ -479,9 +520,10 @@ void PrintOutCallback::handle(const std::list<zmq::message_t*> &request_msg_list
     if (request.header.string("username")) {
         response.header.set_string("username", *request.header.string("username"));
     }
-    if (request.header.string("msg_type")) {
-        response.header.set_string("msg_type", *request.header.string("msg_type"));
-    }
+    //if (request.header.string("msg_type")) {
+    response.header.set_string("msg_type", "execute_reply");
+    // *request.header.string("msg_type"));
+    //}
     if (request.header.string("session")) {
         response.header.set_string("session", *request.header.string("session"));
     }
@@ -491,9 +533,30 @@ void PrintOutCallback::handle(const std::list<zmq::message_t*> &request_msg_list
     std::cout << "RESPONSE content >" << response.content.to_str() << std::endl;
     std::cout << "RESPONSE metadata>" << response.metadata.to_str() << std::endl;
 
-    response.serialize(_key, response_msg_list);
+    ctx.shell().send(response);
 
-    // free values
+    if (!code.empty()) {
+        IPythonMessage pyout;
+        pyout.session_id = request.session_id;
+        pyout.parent.merge(request.header);
+        {
+            uuid_t msg_id;
+            uuid_generate(msg_id);
+            std::ostringstream oss;
+            _uuid_stringify(msg_id, oss);
+            pyout.header.set_string("msg_id",oss.str());
+        }
+        pyout.header.set_string("msg_type", "pyout");
+        pyout.header.set_string("session", request.session_id);
+        pyout.content.set_int64("execution_count", _execution_count);
+
+        json::object_value * pyout_data = pyout.content.mutable_object("data");
+        pyout_data->set_string("text/plain", code);
+        std::cout << "PYOUT content >" << pyout.content.to_str() << std::endl;
+        ctx.io().send(pyout);
+    }
+
+    // free request.
 }
 
 
@@ -539,7 +602,7 @@ int main(int argc, char** argv) {
         key_string = uuidstr.str();
     }
 
-    PrintOutCallback shellCallback(key_string);
+    PrintOutCallback shellCallback;
     Kernel kernel(ctx, kernelid, ip, key_string,  &shellCallback);
 
     try {
@@ -557,5 +620,7 @@ int main(int argc, char** argv) {
     }
     std::cout << "wrote " << connectionfile.str() << std::endl;
 
+
     kernel.message_loop();
+
 }

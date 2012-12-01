@@ -35,14 +35,16 @@ namespace json {
         }
 
 
-        std::string json_test1 = "  {\n \"test\":  127 \n, \"array\": [   [],\n\"a\\\"\\\\a\", true]} ";
+        std::string json_test1 = "  {\n \"test\":  127 \n, \"array\": [   [],\n \"a\\\"\\\\a\", true]} ";
         std::istringstream is2(json_test1);
         std::cout << is2.str() << std::endl;
         std::cout << json_test1.size() << std::endl;
         // std::cout << "'" << is2.get() << "'" << std::endl;
         json::parser parser2(is2);
         value * root3 = NULL;
-        if (parser2.parse(&root3) && root3) {
+        bool parse_success3 = parser2.parse(&root3);
+        assert(parse_success3);
+        if (parse_success3 && root3) {
             std::cout << "parsed root3" << std::endl;
             root3->stringify(std::cout) << std::endl;
         }
@@ -55,6 +57,17 @@ namespace json {
         assert(*o->array("array")->string(1) == "a\"\\a");
         assert(o->array("array")->boolean(2) != NULL);
         assert(*o->array("array")->boolean(2));
+
+        std::string json_test4 = "{\"user_variables\": [], \"code\": \"f = 1\\n\", \"silent\": false, \"allow_stdin\": true, \"store_history\": true, \"user_expressions\": {}}";
+        std::istringstream is4(json_test4);
+        std::cout << is4.str() << std::endl;
+        std::cout << json_test4.size() << std::endl;
+        json::parser parser4(is4);
+        value * root4 = NULL;
+        if (parser4.parse(&root4) && root4) {
+            std::cout << "parsed root4" << std::endl;
+            root4->stringify(std::cout) << std::endl;
+        }
     }
 
 

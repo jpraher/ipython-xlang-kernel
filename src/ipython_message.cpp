@@ -16,6 +16,8 @@ zmq::message_t * convert(const std::string & s) {
     return new zmq::message_t((void*)buf, s.size(), NULL);
 }
 
+IPythonMessage::~IPythonMessage() {
+}
 
 bool IPythonMessage::serialize(const std::string & key, std::list<zmq::message_t*> *messages) const {
 

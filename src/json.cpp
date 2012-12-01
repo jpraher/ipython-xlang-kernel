@@ -110,13 +110,28 @@ std::ostream & string_value::stringify(std::ostream & os) const
     os << "\"";
     for (size_t i = 0; i < _value.size(); i++) {
         char c = _value[i];
-        if (c == '\\') {
+        switch (c) {
+        case '\\':
             os << "\\\\";
-        }
-        else if (c == '"'){
+            break;
+        case '"':
             os << "\\\"";
-        }
-        else {
+        case '\b':
+            os << "\\b";
+            break;
+        case '\f':
+            os << "\\f";
+            break;
+        case '\n':
+            os << "\\n";
+            break;
+        case '\r':
+            os << "\\r";
+            break;
+        case '\t':
+            os << "\\t";
+            break;
+        default:
             os << c;
         }
     }
@@ -612,6 +627,7 @@ parser::parser(std::istream & is)
 {
     _la_successful = _next(&_la);
 }
+
 bool parser::next(token * tok) {
     *tok = _la;
     // clear the value
@@ -684,20 +700,61 @@ bool parser::_next(token * tok) {
         else if (c == '"') {
             int col = _col;
             std::stringstream result;
-            bool unescaped = true;
+            bool escaped = false;
             do {
                 c = _is.get();
-                if (unescaped && c == '"') {
+                if (!escaped && c == '"') {
                     *tok = token(token::STRING, _line, _col);
                     tok->value = new string_value(result.str());
                     _col++;
                     return true;
                 }
-                else if (unescaped && c == '\\') {
-                    unescaped = false;
+                else if (!escaped && c == '\\') {
+                    escaped = true;
+                }
+                else if (escaped && c == '"') {
+                    result.put('"');
+                    escaped = false;
+                }
+                else if (escaped && c == '\\') {
+                    result.put('\\');
+                    escaped = false;
+                }
+                else if (escaped && c == '/') {
+                    result.put('/');
+                    escaped = false;
+                }
+                else if (escaped && c == 'b') {
+                    result.put('\b');
+                    escaped = false;
+                }
+                else if (escaped && c == 'f') {
+                    result.put('\f');
+                    escaped = false;
+                }
+                else if (escaped && c == 'n') {
+                    result.put('\n');
+                    escaped = false;
+                }
+                else if (escaped && c == 'r') {
+                    result.put('\r');
+                    escaped = false;
+                }
+                else if (escaped && c == 't') {
+                    result.put('\t');
+                    escaped = false;
+                }
+                else if (escaped && c == 'u') {
+                    LOG(WARNING) << "Unicode character literals are not yet supported";
+                    escaped = false;
+                    return false;
+                }
+                else if (escaped) {
+                    LOG(WARNING) << "Unexpected token \\" <<  c;
+                    return false;
                 }
                 else {
-                    unescaped = true;
+                    escaped = false;
                     result.put(c);
                 }
                 _col++;
@@ -878,7 +935,7 @@ bool parser::parse(value ** result) {
     else {
         // take the value ownership.
         if (t.value) {
-            LOG(INFO) << "parsed value: " << t.value->to_str();
+            DLOG(INFO) << "parsed value: " << t.value->to_str();
         }
         *result = t.value;
         t.value = NULL;
