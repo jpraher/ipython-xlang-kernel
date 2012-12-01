@@ -1,3 +1,10 @@
+/* -----------------------------------------------------------------------------
+ * Copyright (C) 2012 Jakob Praher
+ *
+ * Distributed under the terms of the BSD License. The full license is in
+ * the file COPYING, distributed as part of this software.
+ * -----------------------------------------------------------------------------
+ */
 
 #include "hmac.h"
 #include <openssl/hmac.h>

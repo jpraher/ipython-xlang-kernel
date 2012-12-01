@@ -1,3 +1,10 @@
+/* -----------------------------------------------------------------------------
+ * Copyright (C) 2012 Jakob Praher
+ *
+ * Distributed under the terms of the BSD License. The full license is in
+ * the file COPYING, distributed as part of this software.
+ * -----------------------------------------------------------------------------
+ */
 
 #include "kernel.h"
 #include "ipython_message.h"
@@ -469,6 +476,7 @@ void PrintOutCallback::execute(EContext & ctx,
     request.deserialize(request_msg_list);
     Message::free(request_msg_list);
 
+    // get info if we are silent
     const std::string *codePtr = request.content.string("code");
     std::string code;
     if (codePtr) {

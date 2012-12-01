@@ -1,3 +1,10 @@
+/* -----------------------------------------------------------------------------
+ * Copyright (C) 2012 Jakob Praher
+ *
+ * Distributed under the terms of the BSD License. The full license is in
+ * the file COPYING, distributed as part of this software.
+ * -----------------------------------------------------------------------------
+ */
 
 #ifndef __ipython__message__h__
 #define __ipython__message__h__
@@ -5,6 +12,7 @@
 #include "json.h"
 #include <zmq.hpp>
 #include "message.h"
+
 
 class IPythonMessage : public Message {
 public:
