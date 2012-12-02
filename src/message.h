@@ -11,6 +11,7 @@
 
 #include "json.h"
 #include <zmq.hpp>
+#include <sstream>
 
 class Message {
 public:
@@ -33,15 +34,27 @@ public:
 
     Channel & io();
     Channel & shell();
+
+    void handle_stdout(const std::string &s);
+    void handle_stderr(const std::string &s);
+
+    std::string stdout();
+    std::string stderr();
+
 private:
     Channel * _io;
     Channel * _shell;
+    std::ostringstream _stdout_oss;
+    std::ostringstream _stderr_oss;
 };
 
 class ExecuteHandler {
 public:
+
+    virtual Message * create_request() = 0;
+
     virtual void execute(EContext & ctx,
-                         std::list<zmq::message_t*> & request)  = 0;
+                         Message * request) = 0;
 };
 
 

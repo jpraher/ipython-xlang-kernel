@@ -23,6 +23,8 @@ using json::object_value;
 
 using json::parser;
 
+const std::string value::EMPTY_STRING = "";
+
 bool *            value::mutable_boolean()     { return NULL; }
 const bool *      value::boolean() const       { return NULL; }
 int64_t *            value::mutable_int64()     { return NULL; }

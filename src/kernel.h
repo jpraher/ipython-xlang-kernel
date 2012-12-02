@@ -16,39 +16,8 @@
 #include "tthread/tinythread.h"
 #include "json.h"
 #include "message.h"
-
-
-
-template <typename T>
-struct delegate_t {
-    //    typedefdelegate_t(T*, pmf_t);
-    // pmf_t
-
-    typedef void (T::*pmf_t)();
-
-    delegate_t(T* that_, pmf_t mf_)
-        : that(that_), mf(mf_)
-    {
-    }
-
-    T* that;
-    pmf_t mf;
-
-    static void dispatch(void * data) {
-        assert(data != NULL);
-        delegate_t<T>* p = reinterpret_cast<delegate_t<T>*>(data);
-        (p->that->*(p->mf))();
-    }
-};
-
-
-class MsgCallback {
- public:
-    virtual ~MsgCallback() {}
-
-    virtual void handle(const std::list<zmq::message_t*> & request,
-                        std::list<zmq::message_t*> *response) = 0;
-};
+#include "delegate.h"
+#include "ioredir.h"
 
 
 class SocketChannel : public Channel {
@@ -110,6 +79,7 @@ public:
 
     const TCPInfo & endpoint_info() const ;
 
+
 private:
     zmq::context_t &_ctx;
     std::string _ip;
@@ -122,6 +92,7 @@ private:
                   _iopubChannel,
                   _shellChannel;
 
+    EContext _exec_ctx;
     ExecuteHandler *_shell_handler;
     // MsgCallback *_shell_handler;
 
@@ -132,8 +103,12 @@ private:
     TCPInfo _tcp_info;
     bool _shutdown;
     size_t _hb_count;
+    // active_method pattern?
     tthread::thread * _hb_thread;
     delegate_t<Kernel> *_run_hb_delegate;
+
+    redirector _stdout_redirector;
+    redirector _stderr_redirector;
 };
 
 #endif

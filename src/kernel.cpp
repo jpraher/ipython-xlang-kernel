@@ -10,6 +10,7 @@
 #include "ipython_message.h"
 #include "hmac.h"
 #include "tthread/tinythread.h"
+#include "delegate.h"
 
 #include <assert.h>
 #include <iostream>
@@ -342,8 +343,13 @@ Kernel::Kernel(zmq::context_t &ctx, const uuid_t & kernelid, const std::string &
       _shutdown(false),
       _hb_count(0),
       _hb_thread(NULL),
-      _run_hb_delegate(NULL)
+      _run_hb_delegate(NULL),
+      _exec_ctx(_iopubChannel, _shellChannel),
+      _stdout_redirector(STDOUT_FILENO, delegate1_t<EContext, void, const std::string&>(&_exec_ctx, &EContext::handle_stdout)),
+      _stderr_redirector(STDERR_FILENO, delegate1_t<EContext, void, const std::string&>(&_exec_ctx, &EContext::handle_stderr))
 {
+
+
     uuid_copy(_kernelid, kernelid);
     _tcp_info.set_ip(_ip);
     std::ostringstream uuidstr;
@@ -396,6 +402,8 @@ void _receive(zmq::socket_t & socket, std::list<zmq::message_t*> *result) {
 void Kernel::start2() {
     delegate_t<Kernel> * _run_hb_delegate = new delegate_t<Kernel>(this, &Kernel::run_heartbeat);
     _hb_thread = new thread(_run_hb_delegate->dispatch, _run_hb_delegate);
+    // _stdout_redirector.start();
+    // _stderr_redirector.start();
 }
 
 
@@ -408,7 +416,7 @@ void Kernel::run_heartbeat() {
 void Kernel::message_loop() {
 
     //SessionMessageParser message_parser;
-    EContext ctx(_iopubChannel, _shellChannel);
+
     do  {
         zmq::pollitem_t items [1];
         /* First item refers to ØMQ socket 'socket' */
@@ -423,12 +431,16 @@ void Kernel::message_loop() {
             // TODO generalize on all sockets
             // number of events
             if (items[0].revents & ZMQ_POLLIN) {
-                std::list<zmq::message_t*> request;
+                std::list<zmq::message_t*> msg_list;
                 // std::list<zmq::message_t*> response;
                 DLOG(INFO) << "receiving";
-                _receive(_shell,&request);
-                DLOG(INFO) << "received " << request.size() << std::endl;
-                _shell_handler->execute(ctx, request);
+                _receive(_shell,&msg_list);
+                DLOG(INFO) << "received " << msg_list.size() << std::endl;
+                Message * request = _shell_handler->create_request();
+                assert(request != NULL);
+                request->deserialize(msg_list);
+                Message::free(msg_list);
+                _shell_handler->execute(_exec_ctx, request);
             }
         }
     } while (!_shutdown);
@@ -452,9 +464,9 @@ public:
     PrintOutCallback();
     virtual ~PrintOutCallback();
 
-
+    virtual Message * create_request();
     virtual void execute(EContext & ctx,
-                         std::list<zmq::message_t*> & request);
+                         Message *request);
 private:
     size_t _execution_count;
 };
@@ -466,18 +478,21 @@ PrintOutCallback::PrintOutCallback()
 
 PrintOutCallback::~PrintOutCallback() {}
 
-
+Message * PrintOutCallback::create_request() {
+    return new IPythonMessage();
+}
 void PrintOutCallback::execute(EContext & ctx,
-                               std::list<zmq::message_t*> &request_msg_list)
+                               Message *requestMsg)
 {
     DLOG(INFO) << "PrintOutCallback::handle()";
 
-    IPythonMessage request;
-    request.deserialize(request_msg_list);
-    Message::free(request_msg_list);
+    IPythonMessage * request = dynamic_cast<IPythonMessage*>(requestMsg);
+    assert(request != NULL);
 
     // get info if we are silent
-    const std::string *codePtr = request.content.string("code");
+    bool silent = json::get(request->content.boolean("silent"), false);
+
+    const std::string *codePtr = request->content.string("code");
     std::string code;
     if (codePtr) {
         code = *codePtr;
@@ -489,13 +504,36 @@ void PrintOutCallback::execute(EContext & ctx,
 
     /*
      */
-    std::cout << "REQUEST header>" <<  request.header.to_str() << std::endl;
-    std::cout << "REQUEST content>" <<  request.content.to_str() << std::endl;
-    std::cout << "REQUEST metadata>" <<  request.metadata.to_str() << std::endl;
+    std::cout << "REQUEST header>" <<  request->header.to_str() << std::endl;
+    std::cout << "REQUEST content>" <<  request->content.to_str() << std::endl;
+    std::cout << "REQUEST metadata>" <<  request->metadata.to_str() << std::endl;
+
+    if (!silent) {
+        IPythonMessage pyin;
+        pyin.session_id = request->session_id;
+        pyin.parent.merge(request->header);
+        {
+            uuid_t msg_id;
+            uuid_generate(msg_id);
+            std::ostringstream oss;
+            _uuid_stringify(msg_id, oss);
+            pyin.header.set_string("msg_id",oss.str());
+        }
+        pyin.header.set_string("msg_type", "pyin");
+        pyin.header.set_string("session", request->session_id);
+        pyin.content.set_int64("execution_count", _execution_count);
+
+        json::object_value * pyout_data = pyin.content.mutable_object("code");
+        pyin.content.set_string("code", json::get(request->content.string("code"), json::value::EMPTY_STRING));
+        std::cout << "PYIN content >" << pyin.content.to_str() << std::endl;
+        ctx.io().send(pyin);
+    }
+
+
 
     IPythonMessage response;
 
-    response.session_id = request.session_id;
+    response.session_id = request->session_id;
     response.content.set_string("status", "ok");
     response.content.set_int64("execution_count", ++_execution_count);
 
@@ -511,7 +549,7 @@ void PrintOutCallback::execute(EContext & ctx,
 
     time_t msnow = time((time_t*)NULL) * 1000;
     response.metadata.set_int64("started",  msnow);
-    response.metadata.merge(request.metadata);
+    response.metadata.merge(request->metadata);
 
     // always new msgid ...
 
@@ -525,28 +563,28 @@ void PrintOutCallback::execute(EContext & ctx,
         _uuid_stringify(msg_id, oss);
         response.header.set_string("msg_id",oss.str());
     }
-    if (request.header.string("username")) {
-        response.header.set_string("username", *request.header.string("username"));
+    if (request->header.string("username")) {
+        response.header.set_string("username", *request->header.string("username"));
     }
     //if (request.header.string("msg_type")) {
     response.header.set_string("msg_type", "execute_reply");
     // *request.header.string("msg_type"));
     //}
-    if (request.header.string("session")) {
-        response.header.set_string("session", *request.header.string("session"));
+    if (request->header.string("session")) {
+        response.header.set_string("session", *request->header.string("session"));
     }
 
-    response.parent.merge(request.header);
+    response.parent.merge(request->header);
     std::cout << "RESPONSE header  >" << response.header.to_str() << std::endl;
     std::cout << "RESPONSE content >" << response.content.to_str() << std::endl;
     std::cout << "RESPONSE metadata>" << response.metadata.to_str() << std::endl;
 
     ctx.shell().send(response);
 
-    if (!code.empty()) {
+    if (!silent && !code.empty()) {
         IPythonMessage pyout;
-        pyout.session_id = request.session_id;
-        pyout.parent.merge(request.header);
+        pyout.session_id = request->session_id;
+        pyout.parent.merge(request->header);
         {
             uuid_t msg_id;
             uuid_generate(msg_id);
@@ -555,7 +593,7 @@ void PrintOutCallback::execute(EContext & ctx,
             pyout.header.set_string("msg_id",oss.str());
         }
         pyout.header.set_string("msg_type", "pyout");
-        pyout.header.set_string("session", request.session_id);
+        pyout.header.set_string("session", request->session_id);
         pyout.content.set_int64("execution_count", _execution_count);
 
         json::object_value * pyout_data = pyout.content.mutable_object("data");
@@ -563,6 +601,25 @@ void PrintOutCallback::execute(EContext & ctx,
         std::cout << "PYOUT content >" << pyout.content.to_str() << std::endl;
         ctx.io().send(pyout);
     }
+
+    if (!silent) {
+        IPythonMessage pyout;
+        pyout.session_id = request->session_id;
+        pyout.parent.merge(request->header);
+        {
+            uuid_t msg_id;
+            uuid_generate(msg_id);
+            std::ostringstream oss;
+            _uuid_stringify(msg_id, oss);
+            pyout.header.set_string("msg_id",oss.str());
+        }
+        pyout.header.set_string("msg_type", "stream");
+        pyout.header.set_string("session", request->session_id);
+        pyout.content.set_string("data", ctx.stdout());
+        pyout.content.set_string("name", "stdout");
+        ctx.io().send(pyout);
+    }
+
 
     // free request.
 }

@@ -20,8 +20,13 @@ namespace json {
     class array_value ;
     class object_value ;
 
+    template <typename T>
+    const T & get(const T*, const T & def);
+
     // undefined ..
     class value {
+    public:
+        static const std::string EMPTY_STRING;
     public:
         virtual int64_t * mutable_int64();
         virtual const int64_t * int64() const;
@@ -245,6 +250,14 @@ namespace json {
         token _la;
         bool _la_successful;
    };
+
+
+
+    template <typename T>
+    inline const T & get(const T* p, const T & def) {
+        if (p == NULL) return def;
+        return *p;
+    }
 }
 
 

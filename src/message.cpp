@@ -25,6 +25,26 @@ EContext::EContext(Channel & io,
 {
 }
 
+void EContext::handle_stdout(const std::string &s) {
+    _stdout_oss << s;
+}
+void EContext::handle_stderr(const std::string &s) {
+    _stderr_oss << s;
+}
+
+std::string EContext::stdout() {
+    std::string s = _stdout_oss.str();
+    _stdout_oss.str("");
+    return s;
+}
+
+std::string EContext::stderr() {
+    std::string s = _stderr_oss.str();
+    _stdout_oss.str("");
+    return s;
+}
+
+
 Channel & EContext::io() {
     assert(_io);
     return *_io;
