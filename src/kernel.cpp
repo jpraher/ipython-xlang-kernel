@@ -52,6 +52,7 @@ SocketChannel::SocketChannel(zmq::socket_t & sock, const std::string &key)
     : _socket(&sock),
       _key(key)
 {
+    DLOG(INFO) << "socket key " << key;
 }
 
 void SocketChannel::send(const Message & message) {
@@ -156,6 +157,11 @@ Kernel::TCPInfo::TCPInfo(const json::object_value & object)
 {
 }
 
+Kernel::TCPInfo::TCPInfo(const TCPInfo & object)
+    : _data(object._data)
+{
+}
+
 
 const std::string &Kernel::TCPInfo::transport() const
 {
@@ -195,7 +201,7 @@ void Kernel::TCPInfo::set_stdin_port(uint16_t port) {
 }
 
 uint16_t    Kernel::TCPInfo::hb_port() const {
-    const int64_t* v = _data.int64("stdin_port");
+    const int64_t* v = _data.int64("hb_port");
     if (v) {
         return *v;
     }
@@ -229,7 +235,7 @@ void Kernel::TCPInfo::set_iopub_port(uint16_t port) {
 
 const std::string & Kernel::TCPInfo::key() const {
     static const std::string EMPTY = "";
-    const std::string * v = _data.string("ip");
+    const std::string * v = _data.string("key");
     if (v) {
         return *v;
     }
@@ -239,6 +245,10 @@ const std::string & Kernel::TCPInfo::key() const {
 void Kernel::TCPInfo::set_key(const std::string & key)
 {
     _data.set_string("key", key);
+}
+
+json::object_value* Kernel::TCPInfo::mutable_json() {
+    return &_data;
 }
 
 const json::object_value & Kernel::TCPInfo::json() const
@@ -328,18 +338,19 @@ bool SessionMessageParser::parse(const char * data, size_t size) {
 
 */
 
-Kernel::Kernel(zmq::context_t &ctx, const uuid_t & kernelid, const std::string &ip, const std::string &hmac_key, ExecuteHandler * shell_handler)
+Kernel::Kernel(zmq::context_t &ctx, const Kernel::TCPInfo &info, ExecuteHandler * shell_handler)
     : _ctx(ctx),
+      _tcp_info(info),
       _hb(ctx, ZMQ_REP),
       _stdin(ctx, ZMQ_ROUTER),
       _iopub(ctx, ZMQ_PUB),
       _shell(ctx, ZMQ_ROUTER),
-      _hmackey_string(hmac_key),
-      _stdinChannel(_stdin, hmac_key),
-      _iopubChannel(_iopub, hmac_key),
-      _shellChannel(_shell, hmac_key),
+      _hmackey_string(info.key()),
+      _stdinChannel(_stdin, info.key()),
+      _iopubChannel(_iopub, info.key()),
+      _shellChannel(_shell, info.key()),
       _shell_handler(shell_handler),
-      _ip(ip),
+      _ip(info.ip()),
       _shutdown(false),
       _hb_count(0),
       _hb_thread(NULL),
@@ -348,43 +359,39 @@ Kernel::Kernel(zmq::context_t &ctx, const uuid_t & kernelid, const std::string &
       _stdout_redirector(STDOUT_FILENO, delegate1_t<EContext, void, const std::string&>(&_exec_ctx, &EContext::handle_stdout)),
       _stderr_redirector(STDERR_FILENO, delegate1_t<EContext, void, const std::string&>(&_exec_ctx, &EContext::handle_stderr))
 {
+}
 
+uint16_t _bind_tcp(zmq::socket_t & sock, const std::string & ip, uint16_t port) {
+    std::ostringstream ep;
+    ep <<  "tcp://" << ip <<  ":";
+    if (port == 0) {
+        ep << "*";
+    } else {
+        ep << port;
+    }
+    DLOG(INFO) << "ZMQ binding endpoint " << ep.str();
 
-    uuid_copy(_kernelid, kernelid);
-    _tcp_info.set_ip(_ip);
-    std::ostringstream uuidstr;
-    _uuid_stringify(_kernelid, uuidstr);
-    _kernelid_string = uuidstr.str();
-    _tcp_info.set_key(_hmackey_string);
+    sock.bind(ep.str().c_str());
+    if (port == 0) {
+        const std::string endpoint = _get_zmq_last_endpoint(sock);
+        uint16_t out_port = 0;
+        _try_zmq_endpoint_get_port(endpoint, out_port);
+        return out_port;
+    }
+    return port;
 }
 
 void Kernel::start() {
-   // use ephemeral port
-    std::string ep = "tcp://" + _ip + ":*";
-   _hb.bind(ep.c_str());
-   _stdin.bind(ep.c_str());
-   _iopub.bind(ep.c_str());
-   _shell.bind(ep.c_str());
+    _bind_tcp(_hb, _ip, _tcp_info.hb_port());
+    _bind_tcp(_stdin, _ip, _tcp_info.stdin_port());
+    _bind_tcp(_iopub, _ip, _tcp_info.iopub_port());
+    _bind_tcp(_shell, _ip, _tcp_info.shell_port());
 
-   const std::string hb_endpoint    = _get_zmq_last_endpoint(_hb);
-   const std::string stdin_endpoint = _get_zmq_last_endpoint(_stdin);
-   const std::string iopub_endpoint = _get_zmq_last_endpoint(_iopub);
-   const std::string shell_endpoint = _get_zmq_last_endpoint(_shell);
+    delegate_t<Kernel> * _run_hb_delegate = new delegate_t<Kernel>(this, &Kernel::run_heartbeat);
+    _hb_thread = new thread(_run_hb_delegate->dispatch, _run_hb_delegate);
 
-   // std::cout << "stdin endpoint: " << stdin_endpoint << std::endl;
-   uint16_t port = 0;
-   _try_zmq_endpoint_get_port(hb_endpoint, port);
-   _tcp_info.set_hb_port(port);
-   port = 0;
-   _try_zmq_endpoint_get_port(stdin_endpoint, port);
-   _tcp_info.set_stdin_port(port);
-   port = 0;
-   _try_zmq_endpoint_get_port(iopub_endpoint, port);
-   _tcp_info.set_iopub_port(port);
-   port = 0;
-   _try_zmq_endpoint_get_port(shell_endpoint, port);
-   _tcp_info.set_shell_port(port);
-
+    // _stdout_redirector.start();
+    // _stderr_redirector.start();
 }
 
 
@@ -398,15 +405,6 @@ void _receive(zmq::socket_t & socket, std::list<zmq::message_t*> *result) {
 }
 
 
-
-void Kernel::start2() {
-    delegate_t<Kernel> * _run_hb_delegate = new delegate_t<Kernel>(this, &Kernel::run_heartbeat);
-    _hb_thread = new thread(_run_hb_delegate->dispatch, _run_hb_delegate);
-    // _stdout_redirector.start();
-    // _stderr_redirector.start();
-}
-
-
 void Kernel::run_heartbeat() {
     DLOG(INFO) << "entering heartbeat run loop.";
     zmq_device(ZMQ_FORWARDER, _hb, _hb);
@@ -414,9 +412,7 @@ void Kernel::run_heartbeat() {
 }
 
 void Kernel::message_loop() {
-
-    //SessionMessageParser message_parser;
-
+    DLOG(INFO) << "entering message loop.";
     do  {
         zmq::pollitem_t items [1];
         /* First item refers to ØMQ socket 'socket' */
@@ -603,6 +599,8 @@ void PrintOutCallback::execute(EContext & ctx,
     }
 
     if (!silent) {
+        std::cout.flush();
+        fflush(stdout);
         IPythonMessage pyout;
         pyout.session_id = request->session_id;
         pyout.parent.merge(request->header);
@@ -619,8 +617,25 @@ void PrintOutCallback::execute(EContext & ctx,
         pyout.content.set_string("name", "stdout");
         ctx.io().send(pyout);
     }
-
-
+    if (!silent) {
+        std::cerr.flush();
+        fflush(stderr);
+        IPythonMessage pyout;
+        pyout.session_id = request->session_id;
+        pyout.parent.merge(request->header);
+        {
+            uuid_t msg_id;
+            uuid_generate(msg_id);
+            std::ostringstream oss;
+            _uuid_stringify(msg_id, oss);
+            pyout.header.set_string("msg_id",oss.str());
+        }
+        pyout.header.set_string("msg_type", "stream");
+        pyout.header.set_string("session", request->session_id);
+        pyout.content.set_string("data", ctx.stderr());
+        pyout.content.set_string("name", "stderr");
+        ctx.io().send(pyout);
+    }
     // free request.
 }
 
@@ -630,62 +645,90 @@ int main(int argc, char** argv) {
 
     google::InitGoogleLogging(argv[0]);
 
+    /*
+starting kernel {'extra_arguments': [u"--KernelApp.parent_appname='ipython-notebook'"], 'cwd': u'/Users/jakob/extsrc/ipython'}
+Starting new kernel af0f4df7-3741-4ec5-9d6a-74c1142dcff6
+/Users/jakob/.ipython/profile_default/security/kernel-af0f4df7-3741-4ec5-9d6a-74c1142dcff6.json
+ipkernel launch_kernel: args (), kwargs {'extra_arguments': [u"--KernelApp.parent_appname='ipython-notebook'"], 'cwd': u'/Users/jakob/extsrc/ipython', 'fname': u'/Users/jakob/.ipython/profile_default/security/kernel-af0f4df7-3741-4ec5-9d6a-74c1142dcff6.json'}
+entry_point - launching kernel ['/usr/bin/python', '-c', 'from IPython.zmq.ipkernel import main; main()', '-f', u'/Users/jakob/.ipython/profile_default/security/kernel-af0f4df7-
+     */
+
+    // '-f', u'/Users/jakob/.ipython/profile_default/security/kernel-524ecbc8-3573-424c-ab97-77f9154b1c7b.json'
+
     int io_threads = 1;
     std::string ip = "127.0.0.1";
     zmq::context_t ctx(io_threads);
 
+    DLOG(INFO) << "Starting kernel";
     std::string id;
+    std::string existing_file;
     for (int i = 1; i < argc; i++) {
         const char * arg = argv[i];
-        if (::strcmp("--id", arg) == 0) {
+        if (::strcmp("--id", arg) == 0 && i + 1 < argc) {
             id = argv[++i];
             std::cout << "reusing id " << id << std::endl;
-       }
+        }
+        else if (::strcmp("-f", arg) == 0 && i + 1 < argc) {
+            existing_file = argv[++i];
+            DLOG(INFO)<< "existing configuration " << existing_file ;
+        }
     }
 
-    uuid_t kernelid;
-    if (id.empty()) {
-        uuid_generate(kernelid);
-    }
-    else {
-        std::istringstream is(id);
-        _uuid_parse(is, kernelid);
-        std::ostringstream os;
-        _uuid_stringify(kernelid, os);
-        assert( os.str() == id );
-    }
+    Kernel::TCPInfo tcpInfo;
+    if (!existing_file.empty()) {
+        std::ifstream fs(existing_file.c_str());
+        json::parser p(fs);
+        bool result = p.parse(tcpInfo.mutable_json());
+        if (!result) {
+            // failed to parse
+            LOG(ERROR) << "Failed to parse " << existing_file ;
+            return 1;
+        }
+    } else {
 
+        uuid_t kernelid;
+        if (id.empty()) {
+            uuid_generate(kernelid);
+        }
+        else {
+            std::istringstream is(id);
+            _uuid_parse(is, kernelid);
+            std::ostringstream os;
+            _uuid_stringify(kernelid, os);
+            assert( os.str() == id );
+        }
 
-    std::string key_string;
-    std::string key_bin;
-    {
-        uuid_t key;
-        uuid_generate(key);
-        key_bin = std::string((char*)key, sizeof(key));
-        std::ostringstream uuidstr;
-        _uuid_stringify(key, uuidstr);
-        key_string = uuidstr.str();
+        std::string key_string;
+        std::string key_bin;
+        {
+            uuid_t key;
+            uuid_generate(key);
+            key_bin = std::string((char*)key, sizeof(key));
+            std::ostringstream uuidstr;
+            _uuid_stringify(key, uuidstr);
+            key_string = uuidstr.str();
+        }
     }
 
     PrintOutCallback shellCallback;
-    Kernel kernel(ctx, kernelid, ip, key_string,  &shellCallback);
+    Kernel kernel(ctx, tcpInfo,  &shellCallback);
 
     try {
         kernel.start();
-        kernel.start2();
     } catch (const std::exception & e) {
-        std::cerr << "error " << e.what() << std::endl;
+        LOG(ERROR) << "Failed to start kernel: " << e.what();
+        return 2;
     }
 
-    std::ostringstream connectionfile;
-    connectionfile << "kernel-" << kernel.id() << ".json";
-    {
-        std::ofstream fs(connectionfile.str().c_str());
-        kernel.endpoint_info().json().stringify(fs);
+    if (existing_file.empty()) {
+        std::ostringstream connectionfile;
+        connectionfile << "kernel-" << kernel.id() << ".json";
+        {
+            std::ofstream fs(connectionfile.str().c_str());
+            kernel.endpoint_info().json().stringify(fs);
+        }
+        std::cout << "wrote " << connectionfile.str() << std::endl;
     }
-    std::cout << "wrote " << connectionfile.str() << std::endl;
-
-
     kernel.message_loop();
 
 }

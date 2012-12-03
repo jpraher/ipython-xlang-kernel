@@ -77,12 +77,15 @@ bool IPythonMessage::serialize(const std::string & key, std::list<zmq::message_t
     messages->push_front(convert(session_id));
 }
 
+
+// to_send: ['<IDS|MSG>', 'b3f7486530469f95104f5d08b671ab49', '{"username":"jakob","msg_type":"execute_request","msg_id":"cbf262c7-81ff-4c0d-824f-8a6ccdb6d35b","version":[0,14,0,"dev"],"session":"8031b811-0d72-4a5f-96ab-83867665cc96","date":"2012-12-03T22:43:28.182231"}', '{}', '{}', '{"user_variables":[],"code":"1\\n","silent":false,"allow_stdin":true,"store_history":true,"user_expressions":{}}']
 bool IPythonMessage::deserialize(const std::list<zmq::message_t*> & messages) {
 
     std::list<zmq::message_t*>::const_iterator msg = messages.begin();
     if (msg == messages.end()) return false;
 
     session_id = std::string((char*)(*msg)->data(), (*msg)->size());
+    DLOG(INFO) << "session_id " << session_id;
 
     bool noDelim = true;
     do {

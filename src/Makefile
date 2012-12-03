@@ -1,5 +1,5 @@
 
-CXXFLAGS+=-g
+CXXFLAGS+=-g -O0
 
 .PHONY: all
 
@@ -8,7 +8,7 @@ all: kernel json_test
 	echo "${CXXFLAGS}"
 
 kernel: kernel.h kernel.o json.o ipython_message.o hmac.o message.o tthread/tinythread.o ioredir.o delegate.h
-	$(CXX) ${CXXFLAGS} -lssl -lcrypto -lzmq -lglog kernel.o json.o ioredir.o ipython_message.o message.o hmac.o tthread/tinythread.o delegate.h -o kernel
+	$(CXX) ${CXXFLAGS}  -lssl -lcrypto -lzmq -lglog kernel.o json.o ioredir.o ipython_message.o message.o hmac.o tthread/tinythread.o delegate.h -o kernel
 
 
 json_test: json.h json.cpp json_test.cpp

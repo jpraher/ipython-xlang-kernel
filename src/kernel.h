@@ -30,16 +30,12 @@ class SocketChannel : public Channel {
 };
 
 class Kernel {
-public:
-    Kernel( zmq::context_t &ctx,
-            const uuid_t & kernelid,
-            const std::string &ip,
-            const std::string &key,
-            ExecuteHandler * shellHandler)
-        ;
 
+public:
     struct TCPInfo {
+
         TCPInfo();
+        TCPInfo(const TCPInfo& tcpInfo);
         TCPInfo(const json::object_value & object);
 
         const std::string &transport() const;
@@ -63,13 +59,19 @@ public:
         const std::string & key() const;
         void set_key(const std::string & key);
 
+        json::object_value * mutable_json() ;
         const json::object_value & json() const;
     private:
         json::object_value _data;
     };
 
+public:
+    Kernel( zmq::context_t &ctx,
+            const TCPInfo & connection_info,
+            ExecuteHandler * shellHandler)
+        ;
+
     void start();
-    void start2();
 
     void message_loop();
     void run_heartbeat();
@@ -82,6 +84,7 @@ public:
 
 private:
     zmq::context_t &_ctx;
+    TCPInfo _tcp_info;
     std::string _ip;
     zmq::socket_t _hb;
 
@@ -94,13 +97,10 @@ private:
 
     EContext _exec_ctx;
     ExecuteHandler *_shell_handler;
-    // MsgCallback *_shell_handler;
 
-    uuid_t _kernelid;
-    uuid_t _hmackey;
     std::string _kernelid_string;
     std::string _hmackey_string;
-    TCPInfo _tcp_info;
+
     bool _shutdown;
     size_t _hb_count;
     // active_method pattern?

@@ -117,7 +117,7 @@ struct function1 {
     }
 
     template<typename T>
-    function1(delegate1_t<T,R,A1> del)
+    function1(const delegate1_t<T,R,A1> & del)
     {        // this is
         typedef R (T::*MPTR) (A1);
         typedef R (*FPTR)(void*, A1);
@@ -133,8 +133,8 @@ struct function1 {
         _arg = new D(del.that, del.mf);
         FPTR fptr = _thunk<D, R, A1>;
         _fp = (void*)fptr;
-        std::cerr << "_fp " << _fp << std::endl;
-        std::cerr << "_arg " << _arg << std::endl;
+        // std::cerr << "_fp " << _fp << std::endl;
+        // std::cerr << "_arg " << _arg << std::endl;
     }
 
     /*
@@ -152,14 +152,16 @@ struct function1 {
     }
     */
 
+
     function1(const function1<R, A1> & f)
     {
+        // std::cerr << "Entering function1" << std::endl;
         if (f._clone != NULL && f._arg != NULL) _arg = f._clone(f._arg);
         _clone = f._clone;
         _free  = f._free;
         _fp = f._fp;
-        std::cerr << "clone _fp " << _fp << std::endl;
-        std::cerr << "clone _arg " << _arg << std::endl;
+        // std::cerr << "clone _fp " << _fp << std::endl;
+        // std::cerr << "clone _arg " << _arg << std::endl;
     }
 
     ~function1() {
@@ -167,9 +169,10 @@ struct function1 {
     }
 
     R operator ()(A1 a1) {
+        // std::cerr << "Operator f()" << std::endl;
         if (_arg == NULL) {
             typedef typename fun_pointer1<R,A1>::type ty;
-            ty *p = reinterpret_cast<ty*>(_fp);
+            ty p = reinterpret_cast<ty>(_fp);
             return p(a1);
         }
         else {

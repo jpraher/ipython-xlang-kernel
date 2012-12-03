@@ -40,7 +40,7 @@ std::string EContext::stdout() {
 
 std::string EContext::stderr() {
     std::string s = _stderr_oss.str();
-    _stdout_oss.str("");
+    _stderr_oss.str("");
     return s;
 }
 

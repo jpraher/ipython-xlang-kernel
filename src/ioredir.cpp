@@ -13,8 +13,7 @@ public:
     static const size_t READ = 0;
     static const size_t WRITE = 1;
 
-//redirector(int fd, const function1_t<void,const std::string&>
-//&target);
+    //redirector(int fd, const function1_t<void,const std::string& &target);
     redirector(int fd, function1<void, const std::string &> target);
     ~redirector();
     void start();
@@ -53,7 +52,7 @@ redirector::~redirector() {
 
 void redirector::_do_redirect() {
     // thread method
-    DLOG(INFO) << "entering do_redirect";
+    // DLOG(INFO) << "entering do_redirect";
     zmq::pollitem_t items[1];
     const int NUM_ITEMS = sizeof(items)/ sizeof(zmq::pollitem_t);
     while (!_stopped) {
@@ -79,7 +78,7 @@ void redirector::_do_redirect() {
                 do {
                     res = read(items[i].fd, data, sizeof(data));
                     if (res > 0) {
-                        DLOG(INFO) << "data " << res ;
+                        // DLOG(INFO) << "data " << res ;
                         s.append(data, res);
                     }
                 } while (res == BUF_SIZE);
