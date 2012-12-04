@@ -98,24 +98,6 @@ bool _try_zmq_endpoint_get_port(const std::string endpoint, uint16_t & port) {
     return errno != EINVAL;
 }
 
-std::ostream & _uuid_stringify(const uuid_t & uuid,
-                               std::ostream & os) {
-
-    assert(sizeof(uuid) == 16);
-
-    for (size_t i = 0; i < sizeof(uuid); ++i ) {
-        int c = uuid[i];
-        char oldfill = os.fill('0');
-        std::streamsize oldwith = os.width(2);
-        os << std::hex << c;
-        os.fill(oldfill);
-        os.width(oldwith);
-        if (i == 3 || i == 5 || i ==  7 || i == 9) {
-            os << "-";
-        }
-    }
-
-}
 
 int _hex_decode(int n) {
     if (n >= '0' && n <= '9') {
@@ -261,86 +243,10 @@ const json::object_value & Kernel::TCPInfo::json() const
  ident1,ident2,...,DELIM,p_header,p_parent,p_metadata,p_content,buffer1,buffer2,..]
  */
 
-/*
-
-
-struct SessionMessageParser {
-
-    SessionMessageParser();
-
-    enum ParseState {
-        SESSION_ID = 1,
-        DELIM = 2,
-        HMAC = 3,
-        HEADER = 4,
-        PARENT = 5,
-        METADATA = 6,
-        CONTENT = 7,
-        FINISHED = 8
-    };
-
-
-    bool is_complete();
-    bool parse(const char * data, size_t length);
-    void reset();
-
-    int state;
-    Message message;
-};
-
-SessionMessageParser::SessionMessageParser()
-    :  state(SESSION_ID)
-{
-}
-
-bool SessionMessageParser::is_complete() {
-    return state == FINISHED;
-}
-
-bool SessionMessageParser::parse(const char * data, size_t size) {
-    if (state == SESSION_ID) {
-        if (size != 36) return false;
-        std::string s(data, size);
-        std::istringstream is(s);
-        _uuid_parse(is, message.session_id);
-        state++;
-    }
-    else if (state == DELIM){
-        if (size != 9) return false;
-        if (memcmp((void*)"<IDS|MSG>", (void*)data, 9) != 0 ) return false;
-        state++;
-    }
-    else if (state == HMAC) {
-        message.hmac = std::string(data, size);
-        state++;
-    }
-    else if (state == HEADER ) {
-        message.header_json = std::string(data, size);
-        state++;
-    }
-    else if (state == PARENT) {
-        message.parent_json = std::string(data, size);
-        state++;
-    }
-    else if (state == METADATA) {
-        message.metadata_json = std::string(data, size);
-        state++;
-    }
-    else if (state == CONTENT) {
-        message.content_json = std::string(data, size);
-        state++;
-    }
-    else {
-        return false;
-    }
-    return true;
-}
-
-*/
-
 Kernel::Kernel(zmq::context_t &ctx, const Kernel::TCPInfo &info, ExecuteHandler * shell_handler)
     : _ctx(ctx),
       _tcp_info(info),
+      _ident(_generate_uuid()),
       _hb(ctx, ZMQ_REP),
       _stdin(ctx, ZMQ_ROUTER),
       _iopub(ctx, ZMQ_PUB),
@@ -355,7 +261,7 @@ Kernel::Kernel(zmq::context_t &ctx, const Kernel::TCPInfo &info, ExecuteHandler 
       _hb_count(0),
       _hb_thread(NULL),
       _run_hb_delegate(NULL),
-      _exec_ctx(_iopubChannel, _shellChannel),
+      _exec_ctx(_ident,_iopubChannel, _shellChannel),
       _stdout_redirector(STDOUT_FILENO, delegate1_t<EContext, void, const std::string&>(&_exec_ctx, &EContext::handle_stdout)),
       _stderr_redirector(STDERR_FILENO, delegate1_t<EContext, void, const std::string&>(&_exec_ctx, &EContext::handle_stderr))
 {
@@ -390,8 +296,8 @@ void Kernel::start() {
     delegate_t<Kernel> * _run_hb_delegate = new delegate_t<Kernel>(this, &Kernel::run_heartbeat);
     _hb_thread = new thread(_run_hb_delegate->dispatch, _run_hb_delegate);
 
-    // _stdout_redirector.start();
-    // _stderr_redirector.start();
+    _stdout_redirector.start();
+    _stderr_redirector.start();
 }
 
 
@@ -447,13 +353,16 @@ const Kernel::TCPInfo & Kernel::endpoint_info() const {
     return _tcp_info;
 }
 
-const std::string & Kernel::id() const  {
-    return _kernelid_string;
+const std::string & Kernel::ident() const  {
+    return _ident;
 }
 const std::string & Kernel::key() const  {
     return _hmackey_string;
 }
 
+std::string _topic(const std::string & ident, const std::string &msg_type) {
+    return "kernel." + ident + "." + msg_type;
+}
 
 class PrintOutCallback : public ExecuteHandler{
 public:
@@ -506,7 +415,7 @@ void PrintOutCallback::execute(EContext & ctx,
 
     if (!silent) {
         IPythonMessage pyin;
-        pyin.session_id = request->session_id;
+        pyin.idents.push_back(_topic(ctx.ident(), "pyin"));
         pyin.parent.merge(request->header);
         {
             uuid_t msg_id;
@@ -516,7 +425,7 @@ void PrintOutCallback::execute(EContext & ctx,
             pyin.header.set_string("msg_id",oss.str());
         }
         pyin.header.set_string("msg_type", "pyin");
-        pyin.header.set_string("session", request->session_id);
+        pyin.header.set_string("session", ctx.session_id());
         pyin.content.set_int64("execution_count", _execution_count);
 
         json::object_value * pyout_data = pyin.content.mutable_object("code");
@@ -529,7 +438,7 @@ void PrintOutCallback::execute(EContext & ctx,
 
     IPythonMessage response;
 
-    response.session_id = request->session_id;
+    response.idents = request->idents;
     response.content.set_string("status", "ok");
     response.content.set_int64("execution_count", ++_execution_count);
 
@@ -541,7 +450,7 @@ void PrintOutCallback::execute(EContext & ctx,
     // get millis since
     response.metadata.set_boolean("dependencies_met", true);
     // TODO set ident
-    response.metadata.set_string("engine", "ident");
+    response.metadata.set_string("engine", ctx.ident());
 
     time_t msnow = time((time_t*)NULL) * 1000;
     response.metadata.set_int64("started",  msnow);
@@ -579,7 +488,7 @@ void PrintOutCallback::execute(EContext & ctx,
 
     if (!silent && !code.empty()) {
         IPythonMessage pyout;
-        pyout.session_id = request->session_id;
+        pyout.idents.push_back(_topic(ctx.ident(), "pyout"));
         pyout.parent.merge(request->header);
         {
             uuid_t msg_id;
@@ -589,7 +498,7 @@ void PrintOutCallback::execute(EContext & ctx,
             pyout.header.set_string("msg_id",oss.str());
         }
         pyout.header.set_string("msg_type", "pyout");
-        pyout.header.set_string("session", request->session_id);
+        pyout.header.set_string("session", ctx.session_id());
         pyout.content.set_int64("execution_count", _execution_count);
 
         json::object_value * pyout_data = pyout.content.mutable_object("data");
@@ -602,7 +511,7 @@ void PrintOutCallback::execute(EContext & ctx,
         std::cout.flush();
         fflush(stdout);
         IPythonMessage pyout;
-        pyout.session_id = request->session_id;
+        pyout.idents.push_back(_topic(ctx.ident(), "stream"));
         pyout.parent.merge(request->header);
         {
             uuid_t msg_id;
@@ -612,7 +521,7 @@ void PrintOutCallback::execute(EContext & ctx,
             pyout.header.set_string("msg_id",oss.str());
         }
         pyout.header.set_string("msg_type", "stream");
-        pyout.header.set_string("session", request->session_id);
+        pyout.header.set_string("session", ctx.session_id());
         pyout.content.set_string("data", ctx.stdout());
         pyout.content.set_string("name", "stdout");
         ctx.io().send(pyout);
@@ -621,7 +530,7 @@ void PrintOutCallback::execute(EContext & ctx,
         std::cerr.flush();
         fflush(stderr);
         IPythonMessage pyout;
-        pyout.session_id = request->session_id;
+        pyout.idents.push_back(_topic(ctx.ident(), "stream"));
         pyout.parent.merge(request->header);
         {
             uuid_t msg_id;
@@ -631,7 +540,7 @@ void PrintOutCallback::execute(EContext & ctx,
             pyout.header.set_string("msg_id",oss.str());
         }
         pyout.header.set_string("msg_type", "stream");
-        pyout.header.set_string("session", request->session_id);
+        pyout.header.set_string("session", ctx.session_id());
         pyout.content.set_string("data", ctx.stderr());
         pyout.content.set_string("name", "stderr");
         ctx.io().send(pyout);
@@ -712,7 +621,7 @@ entry_point - launching kernel ['/usr/bin/python', '-c', 'from IPython.zmq.ipker
 
     PrintOutCallback shellCallback;
     Kernel kernel(ctx, tcpInfo,  &shellCallback);
-
+    DLOG(INFO) << "Kernel id " << kernel.ident();
     try {
         kernel.start();
     } catch (const std::exception & e) {
@@ -722,7 +631,7 @@ entry_point - launching kernel ['/usr/bin/python', '-c', 'from IPython.zmq.ipker
 
     if (existing_file.empty()) {
         std::ostringstream connectionfile;
-        connectionfile << "kernel-" << kernel.id() << ".json";
+        connectionfile << "kernel-" << kernel.ident() << ".json";
         {
             std::ofstream fs(connectionfile.str().c_str());
             kernel.endpoint_info().json().stringify(fs);

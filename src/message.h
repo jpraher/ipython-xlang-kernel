@@ -12,15 +12,25 @@
 #include "json.h"
 #include <zmq.hpp>
 #include <sstream>
+#include <uuid/uuid.h>
+
+
+std::string _generate_uuid();
+
+std::ostream & _uuid_stringify(const uuid_t & uuid,
+                               std::ostream & os);
 
 class Message {
 public:
-    virtual bool serialize(const std::string & key, std::list<zmq::message_t*> *messages) const = 0;
+    virtual bool serialize(const std::string & key,
+                           std::list<zmq::message_t*> *messages) const = 0;
     virtual bool deserialize(const std::list<zmq::message_t*> & messages) = 0;
 
     static void free(std::list<zmq::message_t*> & messages);
 };
 
+class Session {
+};
 
 class Channel {
 public:
@@ -30,10 +40,13 @@ public:
 
 class EContext {
 public:
-    EContext(Channel &io, Channel &shell);
+    EContext(const std::string & ident, Channel &io, Channel &shell);
 
     Channel & io();
     Channel & shell();
+
+    const std::string & ident() const;
+    const std::string & session_id()  const;
 
     void handle_stdout(const std::string &s);
     void handle_stderr(const std::string &s);
@@ -42,6 +55,8 @@ public:
     std::string stderr();
 
 private:
+    std::string _session_id;
+    std::string _ident;
     Channel * _io;
     Channel * _shell;
     std::ostringstream _stdout_oss;

@@ -7,6 +7,33 @@
  */
 
 #include "message.h"
+#include <uuid/uuid.h>
+
+
+std::string _generate_uuid() {
+    uuid_t id;
+    uuid_generate(id);
+    std::ostringstream oss;
+    _uuid_stringify(id, oss);
+    return oss.str();
+}
+std::ostream & _uuid_stringify(const uuid_t & uuid,
+                               std::ostream & os) {
+
+    assert(sizeof(uuid) == 16);
+
+    for (size_t i = 0; i < sizeof(uuid); ++i ) {
+        int c = uuid[i];
+        char oldfill = os.fill('0');
+        std::streamsize oldwith = os.width(2);
+        os << std::hex << c;
+        os.fill(oldfill);
+        os.width(oldwith);
+        if (i == 3 || i == 5 || i ==  7 || i == 9) {
+            os << "-";
+        }
+    }
+}
 
 void Message::free(std::list<zmq::message_t*> & messages) {
     for (std::list<zmq::message_t*>::iterator it = messages.begin();
@@ -18,9 +45,12 @@ void Message::free(std::list<zmq::message_t*> & messages) {
     }
 }
 
-EContext::EContext(Channel & io,
+EContext::EContext(const std::string & ident,
+                   Channel & io,
                    Channel & shell)
-    : _io(&io),
+    : _session_id(_generate_uuid()),
+      _ident(ident),
+      _io(&io),
       _shell(&shell)
 {
 }
@@ -44,6 +74,12 @@ std::string EContext::stderr() {
     return s;
 }
 
+const std::string & EContext::session_id() const {
+    return _session_id;
+}
+const std::string & EContext::ident() const {
+    return _ident;
+}
 
 Channel & EContext::io() {
     assert(_io);

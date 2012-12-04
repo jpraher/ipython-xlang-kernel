@@ -20,7 +20,7 @@ public:
 
     virtual ~IPythonMessage() ;
 
-    std::string session_id;
+    std::list<std::string> idents;
     std::string hmac;
     json::object_value header;
     json::object_value parent;

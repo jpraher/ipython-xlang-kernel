@@ -76,15 +76,18 @@ public:
     void message_loop();
     void run_heartbeat();
 
-    const std::string & id() const;
+    const std::string & ident() const;
     const std::string & key() const;
 
     const TCPInfo & endpoint_info() const ;
 
 
+
 private:
     zmq::context_t &_ctx;
     TCPInfo _tcp_info;
+
+    std::string _ident;
     std::string _ip;
     zmq::socket_t _hb;
 
@@ -97,6 +100,7 @@ private:
 
     EContext _exec_ctx;
     ExecuteHandler *_shell_handler;
+
 
     std::string _kernelid_string;
     std::string _hmackey_string;
