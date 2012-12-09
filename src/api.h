@@ -6,8 +6,8 @@
  * -----------------------------------------------------------------------------
  */
 
-#ifndef __ipython_shell_handler__h__
-#define __ipython_shell_handler__h__
+#ifndef __kernel_api__h__
+#define __kernel_api__h__
 
 typedef
 struct ipython_message {
@@ -51,18 +51,22 @@ typedef int (*ExecuteRequestFunction)(void * ctx,
 
 
 // opaque structure
+struct kernel_env_t;
 struct kernel_t;
 struct shell_handler_t;
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-kernel_t* new_kernel_with_conection_file(const char* connection_file);
+/*
+  kernel_env_t* new_kernel_env();
+  free_kernel_env(kernel_env_t*);
+*/
+kernel_t* new_kernel_with_conection_file(kernel_env_t* env, const char* connection_file);
 void free_kernel(kernel_t*);
 
 int kernel_start(kernel_t*);
-int kernel_stop(kernel_t*);
+int kernel_shutdown(kernel_t*);
 void kernel_set_service_handler(kernel_t*, shell_handler_t*);
 
 
@@ -78,3 +82,5 @@ void ipython_shell_handler_execute_request(shell_handler_t*,ExecuteRequestFuncti
 #ifdef __cplusplus
 }
 #endif
+
+#endif // kernel_api

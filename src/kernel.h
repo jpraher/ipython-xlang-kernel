@@ -18,6 +18,7 @@
 #include "message.h"
 #include "delegate.h"
 #include "ioredir.h"
+#include "scoped_ptr.h"
 
 
 class SocketChannel : public Channel {
@@ -66,23 +67,29 @@ public:
     };
 
 public:
-    Kernel( zmq::context_t &ctx,
-            const TCPInfo & connection_info,
-            ExecuteHandler * shellHandler)
+    Kernel(int number_of_io_threads,
+           const TCPInfo & connection_info)
         ;
 
+    ~Kernel();
+
     void start();
+    void shutdown();
 
     void message_loop();
     void run_heartbeat();
+
+    void set_shell_handler(ExecuteHandler * shellHandler);
 
     const std::string & ident() const;
     const std::string & key() const;
 
     const TCPInfo & endpoint_info() const ;
 
+    bool has_shutdown();
+
 private:
-    zmq::context_t &_ctx;
+    scoped_ptr<zmq::context_t> _ctx;     // seperate context
     TCPInfo _tcp_info;
 
     std::string _ident;
@@ -103,12 +110,15 @@ private:
     std::string _kernelid_string;
     std::string _hmackey_string;
 
-    bool _shutdown;
+    volatile bool _shutdown;
+    volatile bool _shutted_down;
+    bool _started;
     size_t _hb_count;
     // active_method pattern?
-    tthread::thread * _hb_thread;
-    delegate_t<Kernel> *_run_hb_delegate;
-
+    scoped_ptr<tthread::thread>  _hb_thread;
+    scoped_ptr<tthread::thread>  _msg_loop_thread;
+    scoped_ptr<delegate_t<Kernel> > _run_hb_delegate;
+    scoped_ptr<delegate_t<Kernel> > _msg_loop_delegate;
     redirector _stdout_redirector;
     redirector _stderr_redirector;
 };
