@@ -35,6 +35,40 @@ std::ostream & _uuid_stringify(const uuid_t & uuid,
     }
 }
 
+
+int _hex_decode(int n) {
+    if (n >= '0' && n <= '9') {
+        return n - '0';
+    }
+    if (n >= 'a' && n <= 'f') {
+        return (n - 'a') + 10;
+    }
+    if (n >= 'A' && n <= 'F') {
+        return (n - 'a') + 10;
+    }
+    assert (false && "overflow");
+}
+
+std::istream & _uuid_parse(std::istream &is,
+               uuid_t &uuid)
+{
+    //
+    int i = 0;
+    do {
+        // one byte
+        int n1 = is.get();
+        if (n1 == '-') continue;
+        int n2 = is.get();
+
+        n1 = _hex_decode(n1);
+        n2 = _hex_decode(n2);
+        int n =  n1 << 4 | (n2 & 0xF);
+        uuid[i++] = (char)n;
+    } while (i < 16);
+
+}
+
+
 void Message::free(std::list<zmq::message_t*> & messages) {
     for (std::list<zmq::message_t*>::iterator it = messages.begin();
          it != messages.end();

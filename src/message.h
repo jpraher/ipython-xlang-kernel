@@ -20,6 +20,9 @@ std::string _generate_uuid();
 std::ostream & _uuid_stringify(const uuid_t & uuid,
                                std::ostream & os);
 
+std::istream & _uuid_parse(std::istream &is,
+                           uuid_t &uuid);
+
 class Message {
 public:
     virtual bool serialize(const std::string & key,
@@ -44,6 +47,8 @@ public:
 
     Channel & io();
     Channel & shell();
+
+    typedef std::string (EContext::*get_string_t)();
 
     const std::string & ident() const;
     const std::string & session_id()  const;

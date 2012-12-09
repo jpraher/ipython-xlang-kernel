@@ -81,8 +81,6 @@ public:
 
     const TCPInfo & endpoint_info() const ;
 
-
-
 private:
     zmq::context_t &_ctx;
     TCPInfo _tcp_info;
