@@ -38,6 +38,7 @@ IPythonShellHandler::~IPythonShellHandler() {
 }
 
 void IPythonShellHandler::set_handlers(const handler_table_t &handlers) {
+    DLOG(INFO) << "set_handlers" ;
     // copy
     _handlers = handlers;
 }
@@ -139,7 +140,7 @@ void IPythonShellHandler::send_stdout_and_err(EContext & ctx,
 void IPythonShellHandler::handle_execute_request(EContext & ctx,
                                                  IPythonMessage * request)
 {
-
+    DLOG(INFO) << "Entering handle_execute_request";
     // get info if we are silent
     bool silent = json::get(request->content.boolean("silent"), false);
 
@@ -188,8 +189,9 @@ void IPythonShellHandler::handle_execute_request(EContext & ctx,
 
 
     IPythonMessage response;
-
+    DLOG(INFO) << "Got resposne " << execute_response->successful ;
     if (execute_response->successful) {
+        std::cerr << "successful!" << std::endl;
         response.idents = request->idents;
         response.content.set_string("status", "ok");
         response.content.set_int64("execution_count", ++_execution_count);

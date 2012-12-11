@@ -9,6 +9,7 @@ kernel_t * kernel = 0;
 int execute_request(void * ctx,
                     const ipython_execute_request_t * request,
                     ipython_execute_response_t * response) {
+
     response->successful = 1;
     response->media_type = strdup("text/plain");
     response->data = strdup(request->code);
@@ -39,6 +40,9 @@ int main(int argc, char**argv) {
 
     shell_handler_t * handler = new_ipython_shell_handler(kernel);
     handler_table_t table;
+    table.context = NULL;
+    table.generic = NULL;
+    table.execute_request = &execute_request;
     ipython_shell_handler_set_handlers(handler, &table);
 
     kernel_start(kernel);

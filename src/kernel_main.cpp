@@ -124,18 +124,21 @@ entry_point - launching kernel ['/usr/bin/python', '-c', 'from IPython.zmq.ipker
         }
     }
 
-    IPythonShellHandler shellHandler;
-    handler_table_t handlers;
-    handlers.context = NULL;
-    handlers.execute_request = execute_request;
-    handlers.generic = NULL;
 
     //shellHandler.context(NULL);
     // shellHandler.execute_request_handler(execute_request);
 
 
     kernel = new Kernel(io_threads, tcpInfo);
-    kernel->set_shell_handler(&shellHandler);
+
+    IPythonShellHandler * shellHandler = new IPythonShellHandler();
+    handler_table_t handlers;
+    handlers.context = NULL;
+    handlers.execute_request = execute_request;
+    handlers.generic = NULL;
+    shellHandler->set_handlers(handlers);
+    kernel->set_shell_handler(shellHandler);
+
     DLOG(INFO) << "Kernel id " << kernel->ident();
     try {
         kernel->start();
