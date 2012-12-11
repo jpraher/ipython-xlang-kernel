@@ -30,7 +30,9 @@ void _wrap(const IPythonMessage & msg, ipython_message_t * output) {
 
 
 
-IPythonShellHandler::IPythonShellHandler() {
+IPythonShellHandler::IPythonShellHandler()
+    :_execution_count(0)
+{
 
 }
 
@@ -191,10 +193,14 @@ void IPythonShellHandler::handle_execute_request(EContext & ctx,
     IPythonMessage response;
     DLOG(INFO) << "Got resposne " << execute_response->successful ;
     if (execute_response->successful) {
+        if (!silent) {
+            ++_execution_count;
+        }
+
         std::cerr << "successful!" << std::endl;
         response.idents = request->idents;
         response.content.set_string("status", "ok");
-        response.content.set_int64("execution_count", ++_execution_count);
+        response.content.set_int64("execution_count", _execution_count);
 
         // ok case
         response.content.mutable_array("payload");
