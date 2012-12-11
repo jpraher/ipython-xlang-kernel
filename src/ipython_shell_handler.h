@@ -37,9 +37,7 @@ public:
     IPythonShellHandler();
     virtual ~IPythonShellHandler();
 
-    void context(void * ctx);
-    void generic_handler(ServiceFunction servicefunction);
-    void execute_request_handler(ExecuteRequestFunction executefunction);
+    void set_handlers(const handler_table_t &handlers);
 
     virtual Message * create_request();
     virtual void execute(EContext & ctx,
@@ -63,9 +61,9 @@ private:
                              IPythonMessage * request);
 
     size_t _execution_count;
-    void *          _ctx;
-    ServiceFunction _service_function;
-    ExecuteRequestFunction _execute_request_function;
+
+    handler_table_t _handlers;
+
 };
 
 #endif // __ipython_shell_handler__h__

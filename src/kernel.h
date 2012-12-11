@@ -104,7 +104,7 @@ private:
                   _shellChannel;
 
     EContext _exec_ctx;
-    ExecuteHandler *_shell_handler;
+    scoped_ptr<ExecuteHandler> _shell_handler;
 
 
     std::string _kernelid_string;

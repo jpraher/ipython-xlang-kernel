@@ -3,6 +3,9 @@
 #include "kernel.h"
 #include "json.h"
 #include "ipython_message.h"
+#include "ipython_shell_handler.h"
+#include <fstream>
+#include <glog/logging.h>
 
 struct kernel_env_t {
     void * zmq_ctx;
@@ -26,12 +29,13 @@ void free_kernel_env(kernel_env_t* k) {
 
 kernel_t* new_kernel_with_connection_file(/* kernel_env_t* kenv */ int number_io_threads, const char * connection_file) {
 
-    std::ifstream fs(connection_file)
+    std::ifstream fs(connection_file);
     json::parser p(fs);
+    Kernel::TCPInfo tcpInfo;
     bool result = p.parse(tcpInfo.mutable_json());
     if (!result) {
-        LOG(ERROR) << "Failed to parse " << existing_file ;
-        return 1;
+        LOG(ERROR) << "Failed to parse " << connection_file;
+        return NULL;
     }
 
     Kernel *kernel  = new Kernel(number_io_threads, tcpInfo);
@@ -50,9 +54,48 @@ int kernel_start(kernel_t* k) {
     return 0;
 }
 
-int kernel_stop(kernel_t*) {
+int kernel_shutdown(kernel_t* k) {
     Kernel *kernel = reinterpret_cast<Kernel*>(k);
-    kernel->start();
+    kernel->shutdown();
+    return 0;
+}
+
+int kernel_has_shutdown(kernel_t* k) {
+    Kernel *kernel = reinterpret_cast<Kernel*>(k);
+    return kernel->has_shutdown();
+}
+
+
+void kernel_set_service_handler(kernel_t* k, shell_handler_t* s) {
+    ExecuteHandler * handler = reinterpret_cast<ExecuteHandler*>(s);
+    Kernel *kernel = reinterpret_cast<Kernel*>(k);
+    kernel->set_shell_handler(handler);
+}
+
+/**
+ * IPython shell handler
+ */
+shell_handler_t *new_ipython_shell_handler(kernel_t * k) {
+    Kernel *kernel = reinterpret_cast<Kernel*>(k);
+    assert(kernel != NULL);
+
+    IPythonShellHandler * ipython_handler = new IPythonShellHandler();
+    kernel->set_shell_handler(ipython_handler);
+    return reinterpret_cast<shell_handler_t*>(ipython_handler);
+}
+
+/*
+void free_ipython_shell_handler(shell_handler_t*s) {
+    ExecuteHandler * handler = reinterpret_cast<ExecuteHandler*>(s);
+    IPythonShellHandler * ipython_handler = dynamic_cast<IPythonShellHandler*>(handler);
+    delete ipython_handler;
+}
+*/
+
+void ipython_shell_handler_set_handlers(shell_handler_t* s, const handler_table_t * handler) {
+    ExecuteHandler * h = reinterpret_cast<ExecuteHandler*>(s);
+    IPythonShellHandler * ipython_handler = dynamic_cast<IPythonShellHandler*>(h);
+    assert(ipython_handler != NULL);
+    ipython_handler->set_handlers(*handler);
 
 }
-void kernel_set_service_handler(kernel_t*, shell_handler_t*);

@@ -287,7 +287,7 @@ void Kernel::start() {
 
 
 void Kernel::set_shell_handler(ExecuteHandler* handler) {
-    _shell_handler = handler;
+    _shell_handler.reset(handler);
 }
 
 

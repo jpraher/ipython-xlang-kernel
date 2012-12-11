@@ -23,7 +23,7 @@
 #include <glog/logging.h>
 #include <time.h>
 #include <signal.h>
-
+#include <cassert>
 
 std::string _topic(const std::string & ident, const std::string &msg_type) {
     return "kernel." + ident + "." + msg_type;
@@ -125,8 +125,14 @@ entry_point - launching kernel ['/usr/bin/python', '-c', 'from IPython.zmq.ipker
     }
 
     IPythonShellHandler shellHandler;
-    shellHandler.context(NULL);
-    shellHandler.execute_request_handler(execute_request);
+    handler_table_t handlers;
+    handlers.context = NULL;
+    handlers.execute_request = execute_request;
+    handlers.generic = NULL;
+
+    //shellHandler.context(NULL);
+    // shellHandler.execute_request_handler(execute_request);
+
 
     kernel = new Kernel(io_threads, tcpInfo);
     kernel->set_shell_handler(&shellHandler);

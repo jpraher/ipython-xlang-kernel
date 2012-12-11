@@ -50,10 +50,19 @@ typedef int (*ExecuteRequestFunction)(void * ctx,
                                       );
 
 
+typedef
+struct handler_table {
+  void *              context;
+  ServiceFunction        generic;
+  ExecuteRequestFunction execute_request;
+} handler_table_t;
+
+
+
 // opaque structure
-struct kernel_env_t;
-struct kernel_t;
-struct shell_handler_t;
+// typedef struct kernel_env_t;
+typedef struct kernel kernel_t;
+typedef struct shell_handler shell_handler_t;
 
 #ifdef __cplusplus
 extern "C" {
@@ -62,22 +71,20 @@ extern "C" {
   kernel_env_t* new_kernel_env();
   free_kernel_env(kernel_env_t*);
 */
-kernel_t* new_kernel_with_conection_file(kernel_env_t* env, const char* connection_file);
+kernel_t* new_kernel_with_connection_file(/*kernel_env_t* env*/ int number_of_threads, const char* connection_file);
 void free_kernel(kernel_t*);
 
 int kernel_start(kernel_t*);
 int kernel_shutdown(kernel_t*);
-void kernel_set_service_handler(kernel_t*, shell_handler_t*);
-
+/*  void kernel_reset_service_handler(kernel_t*, shell_handler_t*); */
+int kernel_has_shutdown(kernel_t*);
 
 /**
- * IPython shell handler
+ * IPython shell handler owned by this kernel
  */
-shell_handler_t *new_ipython_shell_handler();
-void free_ipython_shell_handler(shell_handler_t*);
-void ipython_shell_handler_ctx(shell_handler_t*);
-void ipython_shell_handler_generic(shell_handler_t*,ServiceFunction);
-void ipython_shell_handler_execute_request(shell_handler_t*,ExecuteRequestFunction);
+shell_handler_t *new_ipython_shell_handler(kernel_t *t);
+// void free_ipython_shell_handler(shell_handler_t*);
+void ipython_shell_handler_set_handlers(shell_handler_t* s, const handler_table_t * handler);
 
 #ifdef __cplusplus
 }

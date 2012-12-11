@@ -37,19 +37,9 @@ IPythonShellHandler::IPythonShellHandler() {
 IPythonShellHandler::~IPythonShellHandler() {
 }
 
-void IPythonShellHandler::context(void* ctx)
-{
-    _ctx = ctx;
-}
-
-void IPythonShellHandler::execute_request_handler(ExecuteRequestFunction erf)
-{
-    _execute_request_function = erf;
-}
-
-void IPythonShellHandler::generic_handler(ServiceFunction sf)
-{
-    _service_function = sf;
+void IPythonShellHandler::set_handlers(const handler_table_t &handlers) {
+    // copy
+    _handlers = handlers;
 }
 
 void IPythonShellHandler::handle_generic(EContext & ctx,
@@ -163,9 +153,6 @@ void IPythonShellHandler::handle_execute_request(EContext & ctx,
         code = code.substr(0, code.size() - 1);
     }
 
-    /*
-     */
-
     if (!silent) {
         IPythonMessage pyin;
         pyin.idents.push_back(_topic(ctx.ident(), "pyin"));
@@ -190,10 +177,13 @@ void IPythonShellHandler::handle_execute_request(EContext & ctx,
 
     ipython_execute_request_t execute_request;
     scoped_ptr<ipython_execute_response_t>  execute_response(alloc_init<ipython_execute_response_t>());
-    memset(execute_response.get(), 0, sizeof(execute_response));
+    memset(&execute_request, 0, sizeof(execute_request));
     execute_request.code = code.c_str();
-    if (_execute_request_function) {
-        _execute_request_function(_ctx, &execute_request, execute_response.get());
+    execute_response->successful = false;
+    if (_handlers.execute_request != NULL) {
+        _handlers.execute_request(_handlers.context,
+                                  &execute_request,
+                                  execute_response.get());
     }
 
 

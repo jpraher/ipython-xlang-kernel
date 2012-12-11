@@ -12,13 +12,17 @@ all: libipython-xlang-kernel${SHLIB_EXT} kernel json_test
 	echo "${CXXFLAGS}"
 
 
-libipython-xlang-kernel${SHLIB_EXT}: kernel.h kernel.o json.o ipython_message.o hmac.o message.o tthread/tinythread.o ioredir.o delegate.h ipython_shell_handler.h ipython_shell_handler.o
-	$(CXX) ${CXXFLAGS} ${SHLIB_FLAGS} -lssl -lcrypto -lzmq -lglog kernel.o json.o ipython_message.o hmac.o message.o ipython_shell_handler.o tthread/tinythread.o ioredir.o \
+libipython-xlang-kernel${SHLIB_EXT}: kernel.h kernel.o json.o ipython_message.o hmac.o message.o tthread/tinythread.o ioredir.o delegate.h ipython_shell_handler.h ipython_shell_handler.o api.o
+	$(CXX) ${CXXFLAGS} ${SHLIB_FLAGS} -lssl -lcrypto -lzmq -lglog api.o kernel.o json.o ipython_message.o hmac.o message.o ipython_shell_handler.o tthread/tinythread.o ioredir.o \
 	-o libipython-xlang-kernel${SHLIB_EXT}
 
 
 kernel: kernel.h kernel_main.o libipython-xlang-kernel${SHLIB_EXT}
 	$(CXX) ${CXXFLAGS} -L. -lssl -lcrypto -lzmq -lglog -lipython-xlang-kernel kernel_main.o  delegate.h -o kernel
+
+
+kernel2: api.h kernel2_main.o libipython-xlang-kernel${SHLIB_EXT}
+	$(CC) ${CFLAGS} -L. -lssl -lcrypto -lzmq -lglog -lipython-xlang-kernel kernel2_main.o  -o kernel2
 
 
 
