@@ -182,7 +182,7 @@ void IPythonShellHandler::handle_execute_request(EContext & ctx,
     scoped_ptr<ipython_execute_response_t>  execute_response(alloc_init<ipython_execute_response_t>());
     memset(&execute_request, 0, sizeof(execute_request));
     execute_request.code = code.c_str();
-    execute_response->successful = false;
+    execute_response->status = StatusError;
     if (_handlers.execute_request != NULL) {
         _handlers.execute_request(_handlers.context,
                                   &execute_request,
@@ -191,63 +191,84 @@ void IPythonShellHandler::handle_execute_request(EContext & ctx,
 
 
     IPythonMessage response;
-    DLOG(INFO) << "Got resposne " << execute_response->successful ;
-    if (execute_response->successful) {
-        if (!silent) {
-            ++_execution_count;
-        }
+    DLOG(INFO) << "Got resposne " << execute_response->status ;
 
-        std::cerr << "successful!" << std::endl;
-        response.idents = request->idents;
-        response.content.set_string("status", "ok");
-        response.content.set_int64("execution_count", _execution_count);
+    // TODO add `abort` information => enum!
+    std::string status = execute_response->status == StatusOk ? "ok" : "error";
 
-        // ok case
+    if (!silent) {
+        ++_execution_count;
+    }
+
+    DLOG(INFO) << "response status " << status;
+
+    response.idents = request->idents;
+    response.content.set_string("status", status);
+    response.content.set_int64("execution_count", _execution_count);
+
+    // ok case
+    if (execute_response->status == StatusOk) {
         response.content.mutable_array("payload");
         response.content.mutable_object("user_variables");
         response.content.mutable_object("user_expressions");
-
-        // get millis since
-        response.metadata.set_boolean("dependencies_met", true);
-        // TODO set ident
-        response.metadata.set_string("engine", ctx.ident());
-
-        time_t msnow = time((time_t*)NULL) * 1000;
-        response.metadata.set_int64("started",  msnow);
-        response.metadata.merge(request->metadata);
-
-        // always new msgid ...
-
-        response.metadata.set_string("status", "ok");
-        // {"date":"2012-11-27T21:55:17.543998","msg_id":"a9522f9c-f097-4921-9d28-35688bd7e32a","msg_type":"execute_request","session":"2efc817e-52d4-4945-aa36-93b755f238fb","username":"jakob","version":[0,14,0,"dev"]}
-
-        response.header.set_string("msg_id", _generate_uuid());
-
-        if (request->header.string("username")) {
-            response.header.set_string("username", *request->header.string("username"));
+    } else if (execute_response->status == StatusError){
+        // ename string  exception name
+        // evalue string exception value
+        // traceback : string list
+        if (execute_response->exception_name) {
+            response.content.set_string("ename", execute_response->exception_name);
         }
-        //if (request.header.string("msg_type")) {
-        response.header.set_string("msg_type", "execute_reply");
-        // *request.header.string("msg_type"));
-        //}
-        if (request->header.string("session")) {
-            response.header.set_string("session", *request->header.string("session"));
+        else {
+            response.content.set_string("ename", "");
         }
-
-        response.parent.merge(request->header);
-        /*
-        std::cout << "RESPONSE header  >" << response.header.to_str() << std::endl;
-        std::cout << "RESPONSE content >" << response.content.to_str() << std::endl;
-        std::cout << "RESPONSE metadata>" <<  response.metadata.to_str() << std::endl;
-        */
+        if (execute_response->exception_value) {
+            response.content.set_string("evalue", execute_response->exception_value);
+        }
+        else {
+            response.content.set_string("evalue", "");
+        }
+        json::array_value * value = response.content.mutable_array("traceback");
+        if (execute_response->traceback && execute_response->traceback_len > 0 ) {
+            for (int i = 0 ; i < execute_response->traceback_len; ++i) {
+                value->set_string(i, execute_response->traceback[i]);
+            }
+        }
     }
-    else {     //  error
 
+    // get millis since
+    response.metadata.set_boolean("dependencies_met", true);
+    // TODO set ident
+    response.metadata.set_string("engine", ctx.ident());
+
+    time_t msnow = time((time_t*)NULL) * 1000;
+    response.metadata.set_int64("started",  msnow);
+    response.metadata.merge(request->metadata);
+
+    // response.metadata.set_string("status", "ok");
+    // {"date":"2012-11-27T21:55:17.543998","msg_id":"a9522f9c-f097-4921-9d28-35688bd7e32a","msg_type":"execute_request","session":"2efc817e-52d4-4945-aa36-93b755f238fb","username":"jakob","version":[0,14,0,"dev"]}
+
+    // always new msgid ...
+    response.header.set_string("msg_id", _generate_uuid());
+
+    if (request->header.string("username")) {
+        response.header.set_string("username", *request->header.string("username"));
     }
+
+    response.header.set_string("msg_type", "execute_reply");
+
+    if (request->header.string("session")) {
+        response.header.set_string("session", *request->header.string("session"));
+    }
+
+    response.parent.merge(request->header);
+
+    DLOG(INFO) << "RESPONSE header  >" << response.header.to_str();
+    DLOG(INFO) << "RESPONSE content >" << response.content.to_str();
+    DLOG(INFO) << "RESPONSE metadata>" <<  response.metadata.to_str();
 
     ctx.shell().send(response);
 
-    if (!silent && execute_response->successful) {
+    if (!silent && execute_response->status == StatusOk) {
         IPythonMessage pyout;
         pyout.idents.push_back(_topic(ctx.ident(), "pyout"));
         pyout.parent.merge(request->header);
@@ -263,7 +284,8 @@ void IPythonShellHandler::handle_execute_request(EContext & ctx,
         else {
             pyout_data->set_string(execute_response->media_type, execute_response->data);
         }
-        std::cout << "PYOUT content >" << pyout.content.to_str() << std::endl;
+        DLOG(INFO) << "PYOUT content >" << pyout.content.to_str();
+
         ctx.io().send(pyout);
     }
 
@@ -283,12 +305,12 @@ void IPythonShellHandler::execute(EContext & ctx,
     IPythonMessage * request = dynamic_cast<IPythonMessage*>(requestMsg);
     assert(request != NULL);
 
-    std::cout << "REQUEST header>" <<  request->header.to_str() << std::endl;
-    std::cout << "REQUEST content>" <<  request->content.to_str() << std::endl;
-    std::cout << "REQUEST metadata>" <<  request->metadata.to_str() << std::endl;
+    DLOG(INFO) << "REQUEST header>" <<  request->header.to_str() ;
+    DLOG(INFO) << "REQUEST content>" <<  request->content.to_str() ;
+    DLOG(INFO) << "REQUEST metadata>" <<  request->metadata.to_str() ;
 
     std::string msg_type = json::get(request->header.string("msg_type"), json::value::EMPTY_STRING);
-    //const std::map<std::string,
+
     if (msg_type == "execute_request") {
         handle_execute_request(ctx, request);
     }

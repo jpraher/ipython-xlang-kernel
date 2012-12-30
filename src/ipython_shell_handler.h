@@ -27,6 +27,16 @@ void delete_op<ipython_execute_response>(ipython_execute_response * p) {
         free(p->media_type);
     if (p->data)
         free(p->data);
+    if (p->exception_name)
+        free(p->exception_name);
+    if (p->exception_value)
+        free(p->exception_value);
+    if (p->traceback && p->traceback_len > 0 ) {
+        for (int i = 0; i < p->traceback_len; ++i) {
+            free(p->traceback[i]);
+        }
+        free(p->traceback);
+    }
     free(p);
 }
 

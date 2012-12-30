@@ -27,13 +27,26 @@ struct ipython_execute_request {
 } ipython_execute_request_t;
 
 
+enum ExecuteStatus {
+    StatusError = 0,
+    StatusOk = 1
+};
 typedef
 struct ipython_execute_response {
     // maybe directly set
     // char * data_text_plain;
-    int  successful;
+    int  status;
+
+    /* output */
     char * media_type;
     char * data;
+
+    /* error case */
+    char * exception_name;
+    char * exception_value;
+    char ** traceback;  /* string */
+    int     traceback_len;
+
 } ipython_execute_response_t;
 
 
@@ -52,7 +65,7 @@ typedef int (*ExecuteRequestFunction)(void * ctx,
 
 typedef
 struct handler_table {
-  void *              context;
+  void *                 context;
   ServiceFunction        generic;
   ExecuteRequestFunction execute_request;
 } handler_table_t;

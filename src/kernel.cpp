@@ -296,14 +296,13 @@ void Kernel::shutdown() {
     _shutdown = true;
     // _stderr_redirector.stop();
     _stdout_redirector.stop();
-    _msg_loop_thread->join();
-    DLOG(INFO) << "After join _msg_loop_thread";
-    try {
-        // _ctx->close();
-    } catch (const std::exception &e) {
-        LOG(ERROR) << "Failed to close ctx " << e.what();
+    if (_msg_loop_thread.get()) {
+        _msg_loop_thread->join();
     }
-    _hb_thread->join();
+    DLOG(INFO) << "After join _msg_loop_thread";
+    if (_hb_thread.get()) {
+        _hb_thread->join();
+    }
     DLOG(INFO) << "After join _hb_thread";
     _shutted_down = true;
     DLOG(INFO) << "Setting shutted_down true";
