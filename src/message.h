@@ -10,6 +10,7 @@
 #define __message__h__
 
 #include "json.h"
+#include "ioredir.h"
 #include <zmq.hpp>
 #include <sstream>
 #include <uuid/uuid.h>
@@ -43,7 +44,11 @@ public:
 
 class EContext {
 public:
-    EContext(const std::string & ident, Channel &io, Channel &shell);
+    EContext(const std::string & ident,
+             Channel &io,
+             Channel &shell,
+             redirector & stderr_redir,
+             redirector & stdout_redir);
 
     Channel & io();
     Channel & shell();
@@ -64,6 +69,8 @@ private:
     std::string _ident;
     Channel * _io;
     Channel * _shell;
+    redirector *_stdout_redir;
+    redirector *_stderr_redir;
     std::ostringstream _stdout_oss;
     std::ostringstream _stderr_oss;
 };

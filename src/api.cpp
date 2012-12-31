@@ -2,6 +2,7 @@
 #include "api.h"
 #include "kernel.h"
 #include "json.h"
+#include "ioredir.h"
 #include "ipython_message.h"
 #include "ipython_shell_handler.h"
 #include <fstream>
@@ -10,6 +11,11 @@
 struct kernel_env_t {
     void * zmq_ctx;
 };
+
+
+void kernel_env_init(const char * app_name) {
+    google::InitGoogleLogging(app_name);
+}
 
 /*
 kernel_env_t * new_kernel_env(int number_threads) {
@@ -98,4 +104,36 @@ void ipython_shell_handler_set_handlers(shell_handler_t* s, const handler_table_
     assert(ipython_handler != NULL);
     ipython_handler->set_handlers(*handler);
 
+}
+
+
+ioredir_t * new_ioredir_stdout() {
+    redirector * red = new redirector(STDOUT_FILENO);
+    red->start();
+    return reinterpret_cast<ioredir_t*>(red);
+}
+ioredir_t * new_ioredir(int fileno) {
+    redirector * red = new redirector(fileno);
+    red->start();
+    return reinterpret_cast<ioredir_t*>(red);
+}
+
+
+int ioredir_receive(ioredir_t *io, char ** b, int * len)
+{
+    redirector * red = reinterpret_cast<redirector*>(io);
+    std::string s;
+    if (!red->receive(s)) {
+        return 0;
+    }
+    *b = (char*) malloc(sizeof(char) * s.size() + 1);
+    memcpy(*b, s.data(), s.size());
+    (*b)[s.size()] = '\0';
+    *len = s.size();
+    return s.size();
+}
+
+void free_ioredir(ioredir_t*io) {
+    redirector * red = reinterpret_cast<redirector*>(io);
+    delete red;
 }

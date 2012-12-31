@@ -76,6 +76,7 @@ struct handler_table {
 // typedef struct kernel_env_t;
 typedef struct kernel kernel_t;
 typedef struct shell_handler shell_handler_t;
+typedef struct ioredir ioredir_t;
 
 #ifdef __cplusplus
 extern "C" {
@@ -86,6 +87,8 @@ extern "C" {
 */
 kernel_t* new_kernel_with_connection_file(/*kernel_env_t* env*/ int number_of_threads, const char* connection_file);
 void free_kernel(kernel_t*);
+
+void kernel_env_init(const char* app);
 
 int kernel_start(kernel_t*);
 int kernel_shutdown(kernel_t*);
@@ -98,6 +101,11 @@ int kernel_has_shutdown(kernel_t*);
 shell_handler_t *new_ipython_shell_handler(kernel_t *t);
 // void free_ipython_shell_handler(shell_handler_t*);
 void ipython_shell_handler_set_handlers(shell_handler_t* s, const handler_table_t * handler);
+
+ioredir_t * new_ioredir_stdout();
+ioredir_t * new_ioredir(int fileno);
+int ioredir_receive(ioredir_t *io, char ** b, int * len);
+void free_ioredir(ioredir_t*t);
 
 #ifdef __cplusplus
 }

@@ -232,9 +232,10 @@ Kernel::Kernel(int number_of_io_threads,
       _hb_count(0),
       _hb_thread(NULL),
       _run_hb_delegate(NULL),
-      _exec_ctx(_ident,_iopubChannel, _shellChannel),
-      _stdout_redirector(STDOUT_FILENO, delegate1_t<EContext, void, const std::string&>(&_exec_ctx, &EContext::handle_stdout)),
-      _stderr_redirector(STDERR_FILENO, delegate1_t<EContext, void, const std::string&>(&_exec_ctx, &EContext::handle_stderr))
+      _stdout_redirector(STDOUT_FILENO/*delegate1_t<EContext, void, const std::string&>(&_exec_ctx, &EContext::handle_stdout)*/),
+      _stderr_redirector(STDERR_FILENO /*delegate1_t<EContext, void, const std::string&>(&_exec_ctx, &EContext::handle_stderr)*/),
+      _exec_ctx(_ident,_iopubChannel, _shellChannel, _stdout_redirector, _stderr_redirector)
+
 {
 }
 
@@ -277,7 +278,7 @@ void Kernel::start() {
     _hb_thread.reset(new thread(_run_hb_delegate->dispatch, _run_hb_delegate.get()));
 
     _stdout_redirector.start();
-    // _stderr_redirector.start();
+    _stderr_redirector.start();
 
     _msg_loop_delegate.reset(new delegate_t<Kernel>(this, &Kernel::message_loop));
     _msg_loop_thread.reset(new thread(_msg_loop_delegate->dispatch, _msg_loop_delegate.get()));

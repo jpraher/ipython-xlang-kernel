@@ -81,30 +81,46 @@ void Message::free(std::list<zmq::message_t*> & messages) {
 
 EContext::EContext(const std::string & ident,
                    Channel & io,
-                   Channel & shell)
+                   Channel & shell,
+                   redirector & stdout_redirector,
+                   redirector & stderr_redirector)
     : _session_id(_generate_uuid()),
       _ident(ident),
       _io(&io),
-      _shell(&shell)
+      _shell(&shell),
+      _stdout_redir(&stdout_redirector),
+      _stderr_redir(&stderr_redirector)
 {
 }
 
 void EContext::handle_stdout(const std::string &s) {
     _stdout_oss << s;
+    _stdout_oss.flush();
 }
 void EContext::handle_stderr(const std::string &s) {
     _stderr_oss << s;
+    _stderr_oss.flush();
 }
 
 std::string EContext::stdout() {
+    /*
     std::string s = _stdout_oss.str();
     _stdout_oss.str("");
+    */
+    std::string s;
+    if (_stdout_redir) {
+        bool result = _stdout_redir->receive(s);
+    }
     return s;
 }
 
 std::string EContext::stderr() {
-    std::string s = _stderr_oss.str();
-    _stderr_oss.str("");
+    // std::string s = _stderr_oss.str();
+    // _stderr_oss.str("");
+    std::string s;
+    if (_stderr_redir) {
+        bool result = _stderr_redir->receive(s);
+    }
     return s;
 }
 

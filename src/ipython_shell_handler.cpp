@@ -114,7 +114,9 @@ void IPythonShellHandler::_sendStream(EContext & ctx,
     pyout.header.set_string("msg_type", "stream");
     pyout.header.set_string("session", ctx.session_id());
     pyout.content.set_string("data", (ctx.*get_string)());
-    pyout.content.set_string("name", "stderr");
+    pyout.content.set_string("name", name);
+    DLOG(INFO) << "PYOUT: " << name;
+    DLOG(INFO) << pyout.content.to_str();
     ctx.io().send(pyout);
 }
 
@@ -173,7 +175,7 @@ void IPythonShellHandler::handle_execute_request(EContext & ctx,
 
         json::object_value * pyout_data = pyin.content.mutable_object("code");
         pyin.content.set_string("code", json::get(request->content.string("code"), json::value::EMPTY_STRING));
-        std::cout << "PYIN content >" << pyin.content.to_str() << std::endl;
+        DLOG(INFO) << "PYIN content >" << pyin.content.to_str() ;
         ctx.io().send(pyin);
     }
 
@@ -191,7 +193,7 @@ void IPythonShellHandler::handle_execute_request(EContext & ctx,
 
 
     IPythonMessage response;
-    DLOG(INFO) << "Got resposne " << execute_response->status ;
+    DLOG(INFO) << "Got response " << execute_response->status ;
 
     // TODO add `abort` information => enum!
     std::string status = execute_response->status == StatusOk ? "ok" : "error";
@@ -199,6 +201,7 @@ void IPythonShellHandler::handle_execute_request(EContext & ctx,
     if (!silent) {
         ++_execution_count;
     }
+    send_stdout_and_err(ctx, request);
 
     DLOG(INFO) << "response status " << status;
 
@@ -285,13 +288,10 @@ void IPythonShellHandler::handle_execute_request(EContext & ctx,
             pyout_data->set_string(execute_response->media_type, execute_response->data);
         }
         DLOG(INFO) << "PYOUT content >" << pyout.content.to_str();
-
         ctx.io().send(pyout);
     }
 
-    if (!silent) {
-        send_stdout_and_err(ctx, request);
-    }
+
     // free request.
 }
 

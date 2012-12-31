@@ -39,7 +39,7 @@ int execute_request(void * ctx,
                     const ipython_execute_request_t * request,
                     ipython_execute_response_t * response) {
 
-    response->successful = true;
+    response->status = StatusOk;
     response->media_type = strdup("text/plain");
     response->data = strdup(request->code);
     return 0;

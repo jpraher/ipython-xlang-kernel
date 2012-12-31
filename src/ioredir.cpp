@@ -2,43 +2,18 @@
 #include "tthread/tinythread.h"
 #include "delegate.h"
 #include "json.h"
+#include "ioredir.h"
 #include <glog/logging.h>
 #include <zmq.hpp>
 #include <iostream>
 #include <fcntl.h>
 
-
-class redirector {
-public:
-    static const size_t READ = 0;
-    static const size_t WRITE = 1;
-
-    //redirector(int fd, const function1_t<void,const std::string& &target);
-    redirector(int fd, function1<void, const std::string &> target);
-    ~redirector();
-    void start();
-    void stop();
-
-private:
-    void _do_redirect();
-
-    active_method<redirector> _redirect;
-    volatile bool _stopped;
-    int _fd;
-    int _fd_orig;
-
-    tthread::thread * redir;
-    int _filedes[2];
-    function1<void,const std::string&> _target;
-
-};
-
-redirector::redirector(int fd, function1<void,const std::string&> target)
+redirector::redirector(int fd /*, function1<void,const std::string&> target*/)
     : _redirect(delegate_t<redirector>(this, &redirector::_do_redirect)),
       _stopped(true),
       _fd(fd),
-      _fd_orig(-1),
-      _target(target)
+      _fd_orig(-1)
+      // _target(target)
 {
     _filedes[READ] = -1;
     _filedes[WRITE] = -1;
@@ -51,41 +26,77 @@ redirector::~redirector() {
 // int redirector::fd_orig() { return _fd_orig; }
 
 void redirector::_do_redirect() {
-    // thread method
-    // DLOG(INFO) << "entering do_redirect";
+   while (!_stopped) {
+       zmq::pollitem_t items[1];
+       const int NUM_ITEMS = sizeof(items)/ sizeof(zmq::pollitem_t);
+
+       // _reading = false;
+       items[0].fd = _filedes[READ];
+       items[0].socket = NULL;
+       items[0].events = ZMQ_POLLIN;
+
+       // DLOG(INFO) << "before zmq_pool";
+       int result = zmq_poll(items, NUM_ITEMS, 5000 );
+       if (result < 0) {
+           LOG(WARNING) << "Failed to call zmq_poll " << result;
+       }
+       DLOG(INFO) << "IO zmq_poll returned " << result;
+       if (result ==  0) {
+           continue;
+       }
+       bool ok  = _receive(_receive_mutex, _data, _filedes[READ], 0);
+   }
+}
+
+
+bool redirector::receive(std::string & s) {
+    tthread::lock_guard<tthread::recursive_mutex> guard(_receive_mutex);
+    bool result = _receive(_receive_mutex, _data, _filedes[READ], 0);
+    s = _data;
+    _data.clear();
+    return result;
+}
+
+bool redirector::_receive(tthread::recursive_mutex & mutex, std::string & s, int fd, int timeout) {
+
+    tthread::lock_guard<tthread::recursive_mutex> guard(mutex);
+
     zmq::pollitem_t items[1];
     const int NUM_ITEMS = sizeof(items)/ sizeof(zmq::pollitem_t);
-    while (!_stopped) {
-        items[0].fd = _filedes[READ];
-        items[0].socket = NULL;
-        items[0].events = ZMQ_POLLIN;
 
-        int timeout = 5; // 5000 ms
-        // DLOG(INFO) << "before zmq_pool";
-        int result = zmq_poll(items, NUM_ITEMS, timeout);
-        if (result < 0) {
-            LOG(WARNING) << "Failed to call zmq_poll " << result;
-        }
-        if (result ==  0) continue;
+    // _reading = false;
+    items[0].fd = fd;
+    items[0].socket = NULL;
+    items[0].events = ZMQ_POLLIN;
 
-
-        for (int i = 0; i < NUM_ITEMS; ++i) {
-            if (items[i].revents & ZMQ_POLLIN) {
-                const int BUF_SIZE = 5;
-                char data[BUF_SIZE];
-                int res = 0;
-                std::string s;
-                do {
-                    res = read(items[i].fd, data, sizeof(data));
-                    if (res > 0) {
-                        // DLOG(INFO) << "data " << res ;
-                        s.append(data, res);
-                    }
-                } while (res == BUF_SIZE);
-                 _target(s);
-            }
+    // DLOG(INFO) << "before zmq_pool";
+    int result = zmq_poll(items, NUM_ITEMS, timeout);
+    if (result < 0) {
+        LOG(WARNING) << "Failed to call zmq_poll " << result;
+        return false;
+    }
+    DLOG(INFO) << "IO zmq_poll returned " << result;
+    if (result ==  0) {
+        return true;
+    }
+    // _reading = true;
+    DLOG(INFO) << "IO received" ;
+    for (int i = 0; i < NUM_ITEMS; ++i) {
+        if (items[i].revents & ZMQ_POLLIN) {
+            const int BUF_SIZE = 1024;
+            char data[BUF_SIZE];
+            int res = 0;
+            do {
+                res = read(items[i].fd, data, sizeof(data));
+                if (res > 0) {
+                    s.append(data, res);
+                    DLOG(INFO) << "IO data:" << s ;
+                }
+            } while (res == BUF_SIZE);
         }
     }
+    DLOG(INFO) << "IO done" ;
+    return true;
 }
 
 void redirector::start() {
