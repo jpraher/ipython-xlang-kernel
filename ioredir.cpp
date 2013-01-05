@@ -40,7 +40,7 @@ void redirector::_do_redirect() {
        if (result < 0) {
            LOG(WARNING) << "Failed to call zmq_poll " << result;
        }
-       DLOG(INFO) << "IO zmq_poll returned " << result;
+       // DLOG(INFO) << "IO zmq_poll returned " << result;
        if (result ==  0) {
            continue;
        }
@@ -75,12 +75,12 @@ bool redirector::_receive(tthread::recursive_mutex & mutex, std::string & s, int
         LOG(WARNING) << "Failed to call zmq_poll " << result;
         return false;
     }
-    DLOG(INFO) << "IO zmq_poll returned " << result;
+    // DLOG(INFO) << "IO zmq_poll returned " << result;
     if (result ==  0) {
         return true;
     }
     // _reading = true;
-    DLOG(INFO) << "IO received" ;
+    // DLOG(INFO) << "IO received" ;
     for (int i = 0; i < NUM_ITEMS; ++i) {
         if (items[i].revents & ZMQ_POLLIN) {
             const int BUF_SIZE = 1024;
@@ -90,12 +90,12 @@ bool redirector::_receive(tthread::recursive_mutex & mutex, std::string & s, int
                 res = read(items[i].fd, data, sizeof(data));
                 if (res > 0) {
                     s.append(data, res);
-                    DLOG(INFO) << "IO data:" << s ;
+                    // DLOG(INFO) << "IO data:" << s ;
                 }
             } while (res == BUF_SIZE);
         }
     }
-    DLOG(INFO) << "IO done" ;
+    // DLOG(INFO) << "IO done" ;
     return true;
 }
 

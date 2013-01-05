@@ -1,6 +1,6 @@
 
 
-* Configuration
+* TODO Configuration
 
 http://ipython.org/ipython-doc/dev/config/overview.html#config-overview
 
@@ -43,7 +43,7 @@ c.AliasManager.user_aliases = [
 ]
 #+END_EXAMPLE
 
-* Overwriting the kernel
+* TODO Overwriting the kernel
 
 #+BEGIN_EXAMPLE
 --existing kernel-625592ae-3c1b-4b3c-9c13-ed652c97b1de.json
@@ -126,7 +126,7 @@ content = {
 #+END_EXAMPLE
 
 
-* Sample messages
+* TODO Sample messages
 
 #+BEGIN_EXAMPLE
 IN
@@ -241,7 +241,7 @@ Out[12]: 9999999999999
 enter handle execute reply!
 
 
-* How output is produced - PRINT_EXEC and sys.displayhook
+* TODO How output is produced - PRINT_EXEC and sys.displayhook
 
 The mode argument specifies what kind of code must be compiled; it can
 be 'exec' if source consists of a sequence of statements, 'eval' if it
@@ -293,4 +293,23 @@ msg
 'header': {'username': u'kernel', 'msg_type': u'pyout', 'msg_id':
 '0fe40f5f-9aee-4d35-9317-7d8965e1bba5', 'version': [0, 14, 0, 'dev'], 
 'session': u'80d02d11-7014-4ddc-be5b-f09ee35d1872', 'date': datetime.datetime(2012, 11, 30, 23, 6, 2, 945854)}, 'metadata': {}}
+#+END_EXAMPLE
+
+
+
+* TODO Implement Shutdown 
+#+BEGIN_EXAMPLE
+I0105 14:33:59.263094 668590080 ipython_shell_handler.cpp:305] IPythonShellHandler::execute()
+I0105 14:33:59.263118 668590080 ipython_shell_handler.cpp:310] REQUEST
+header>
+{"date":"2013-01-05T14:33:59.261839",
+"msg_id":"78a4c906-42c5-43b8-b6dc-c9d9fb948f34",
+"msg_type":"shutdown_request",
+"session":"b7a1b9bc-bf5d-44c0-84e5-8bec06f7380e",
+"username":"jakob",
+"version":[0,14,0,"dev"]}
+I0105 14:33:59.263128 668590080 ipython_shell_handler.cpp:311] REQUEST content>{"restart":false}
+I0105 14:33:59.263134 668590080 ipython_shell_handler.cpp:312] REQUEST metadata>{}
+I0105 14:33:59.263146 668590080 ipython_shell_handler.cpp:58] received
+**_request
 #+END_EXAMPLE

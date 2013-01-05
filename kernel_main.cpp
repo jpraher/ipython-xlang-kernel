@@ -131,7 +131,7 @@ entry_point - launching kernel ['/usr/bin/python', '-c', 'from IPython.zmq.ipker
 
     kernel = new Kernel(io_threads, tcpInfo);
 
-    IPythonShellHandler * shellHandler = new IPythonShellHandler();
+    IPythonShellHandler * shellHandler = new IPythonShellHandler(kernel);
     handler_table_t handlers;
     handlers.context = NULL;
     handlers.execute_request = execute_request;

@@ -44,17 +44,17 @@ void delete_op<ipython_execute_response>(ipython_execute_response * p) {
 
 class IPythonShellHandler : public ExecuteHandler{
 public:
-    IPythonShellHandler();
+    IPythonShellHandler(Kernel * kernel);
     virtual ~IPythonShellHandler();
 
     void set_handlers(const handler_table_t &handlers);
 
     virtual Message * create_request();
-    virtual void execute(EContext & ctx,
-                         Message *request);
+    virtual void execute(EContext & ctx,  Message *request);
 
     void handle_generic        (EContext & ctx, IPythonMessage * request);
     void handle_execute_request(EContext & ctx, IPythonMessage * request);
+    void handle_shutdown_request(EContext & ctx, IPythonMessage * request);
 
 private:
 
@@ -73,6 +73,7 @@ private:
     size_t _execution_count;
 
     handler_table_t _handlers;
+    Kernel *_kernel;
 
 };
 

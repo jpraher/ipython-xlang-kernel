@@ -240,9 +240,11 @@ Kernel::Kernel(int number_of_io_threads,
 }
 
 Kernel::~Kernel() {
-    if (_shutdown) {
+    if (!_shutdown) {
         shutdown();
     }
+    DLOG(INFO) << "Calling ~Kernel";
+    google::FlushLogFiles(google::INFO);
 }
 
 uint16_t _bind_tcp(zmq::socket_t & sock, const std::string & ip, uint16_t port) {

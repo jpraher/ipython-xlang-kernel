@@ -27,11 +27,9 @@ void _wrap(const IPythonMessage & msg, ipython_message_t * output) {
 
 
 
-
-
-
-IPythonShellHandler::IPythonShellHandler()
-    :_execution_count(0)
+IPythonShellHandler::IPythonShellHandler(Kernel * kernel)
+    :_execution_count(0),
+     _kernel(kernel)
 {
 
 }
@@ -41,8 +39,7 @@ IPythonShellHandler::~IPythonShellHandler() {
 
 void IPythonShellHandler::set_handlers(const handler_table_t &handlers) {
     DLOG(INFO) << "set_handlers" ;
-    // copy
-    _handlers = handlers;
+     _handlers = handlers;
 }
 
 void IPythonShellHandler::handle_generic(EContext & ctx,
@@ -297,6 +294,36 @@ void IPythonShellHandler::handle_execute_request(EContext & ctx,
     // free request.
 }
 
+void IPythonShellHandler::handle_shutdown_request(EContext &ctx,  IPythonMessage * request)
+{
+    IPythonMessage response;
+    response.metadata.merge(request->metadata);
+    response.header.set_string("msg_id", _generate_uuid());
+    if (request->header.string("username")) {
+        response.header.set_string("username", *request->header.string("username"));
+    }
+
+    response.header.set_string("msg_type", "shutdown_reply");
+    if (request->header.string("session")) {
+        response.header.set_string("session", *request->header.string("session"));
+    }
+
+    // response.parent = request.header
+    response.parent.merge(request->header);
+
+    response.content.set_boolean("restart",false);
+
+    DLOG(INFO) << "RESPONSE header  >" << response.header.to_str();
+    DLOG(INFO) << "RESPONSE content >" << response.content.to_str();
+    DLOG(INFO) << "RESPONSE metadata>" <<  response.metadata.to_str();
+    send_stdout_and_err(ctx, request);
+    ctx.shell().send(response);
+
+    DLOG(INFO) << "Perform shutdown!" ;
+    _kernel->shutdown();
+    DLOG(INFO) << "Has kernel shutdown: " << _kernel->has_shutdown();
+    google::FlushLogFiles(google::INFO);
+}
 
 
 void IPythonShellHandler::execute(EContext & ctx,
@@ -315,6 +342,9 @@ void IPythonShellHandler::execute(EContext & ctx,
 
     if (msg_type == "execute_request") {
         handle_execute_request(ctx, request);
+    }
+    else if (msg_type == "shutdown_request") {
+        handle_shutdown_request(ctx, request);
     }
     else {
         handle_generic(ctx, request);

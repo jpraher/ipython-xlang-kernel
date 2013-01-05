@@ -85,7 +85,7 @@ shell_handler_t *new_ipython_shell_handler(kernel_t * k) {
     Kernel *kernel = reinterpret_cast<Kernel*>(k);
     assert(kernel != NULL);
 
-    IPythonShellHandler * ipython_handler = new IPythonShellHandler();
+    IPythonShellHandler * ipython_handler = new IPythonShellHandler(kernel);
     kernel->set_shell_handler(ipython_handler);
     return reinterpret_cast<shell_handler_t*>(ipython_handler);
 }
