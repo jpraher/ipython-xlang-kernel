@@ -23,7 +23,7 @@ struct ipython_message {
 typedef
 struct ipython_execute_request {
     const char * code;
-
+    const char * content_json_string;
 } ipython_execute_request_t;
 
 

@@ -184,6 +184,8 @@ void IPythonShellHandler::handle_execute_request(EContext & ctx,
     scoped_ptr<ipython_execute_response_t>  execute_response(alloc_init<ipython_execute_response_t>());
     memset(&execute_request, 0, sizeof(execute_request));
     execute_request.code = code.c_str();
+    std::string content_string = request->content.to_str();
+    execute_request.content_json_string = content_string.c_str();
     execute_response->status = StatusError;
     if (_handlers.execute_request != NULL) {
         _handlers.execute_request(_handlers.context,
