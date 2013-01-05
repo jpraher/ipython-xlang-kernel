@@ -262,7 +262,9 @@ void Kernel::start() {
     if (_started) {
         return;
     }
-    _shutdown = false;
+
+    DLOG(INFO) << "creating new sockets";
+
     _hb.reset(new zmq::socket_t(*_ctx, ZMQ_REP));
     _bind_tcp(*_hb, _ip, _tcp_info.hb_port());
 
@@ -275,12 +277,16 @@ void Kernel::start() {
     _shell.reset(new zmq::socket_t(*_ctx, ZMQ_ROUTER));
     _bind_tcp(*_shell, _ip, _tcp_info.shell_port());
 
+    DLOG(INFO) << "bound sockets";
     _stdinChannel.reset(new SocketChannel(*_stdin,  _hmackey_string));
     _iopubChannel.reset(new SocketChannel(*_iopub,  _hmackey_string));
     _shellChannel.reset(new SocketChannel(*_shell,  _hmackey_string));
+    DLOG(INFO) << "channels initialized";
 
     _exec_ctx.reset(new EContext(_ident,*_iopubChannel, *_shellChannel,
                                  _stdout_redirector, _stderr_redirector));
+
+    _shutdown = false;
 
     _run_hb_delegate.reset(new delegate_t<Kernel>(this, &Kernel::run_heartbeat));
     _hb_thread.reset(new thread(_run_hb_delegate->dispatch, _run_hb_delegate.get()));
@@ -293,6 +299,7 @@ void Kernel::start() {
 
     _started = true;
     _shutted_down = false;
+    DLOG(INFO) << "kernel started";
 }
 
 
@@ -301,19 +308,30 @@ void Kernel::set_shell_handler(ExecuteHandler* handler) {
 }
 
 void Kernel::stop() {
+    DLOG(INFO) << "Kernel::stop _started=" <<  _started << ", _shutdown=" << _shutdown ;
+    google::FlushLogFiles(google::INFO);
     if (!_started) return;
-
     if (_shutdown) return;
     _shutdown = true;
+
     // _stderr_redirector.stop();
     _stdout_redirector.stop();
     if (_msg_loop_thread.get()) {
+        // can be invoked from inside the message_loop
+        // self join is nop-operation
         _msg_loop_thread->join();
+        // _msg_loop_thread.reset(NULL);
+        // _msg_loop_delegate.reset(NULL);
     }
+
     DLOG(INFO) << "After join _msg_loop_thread";
     if (_hb_thread.get()) {
+        _hb->close();
         _hb_thread->join();
+        // _hb_thread.reset(NULL);
+        // _run_hb_delegate.reset(NULL);
     }
+    DLOG(INFO) << "After join _hb_thread";
 
     _exec_ctx.reset(NULL);
     _stdinChannel.reset(NULL);
@@ -323,10 +341,7 @@ void Kernel::stop() {
     _iopub.reset(NULL);
     _stdin.reset(NULL);
     _shell.reset(NULL);
-
-    DLOG(INFO) << "After join _hb_thread";
     _started = false;
-
 }
 
 void Kernel::shutdown() {
@@ -338,9 +353,6 @@ void Kernel::shutdown() {
 bool Kernel::has_shutdown() {
     return _shutted_down;
 }
-
-
-
 
 
 
@@ -394,6 +406,7 @@ void Kernel::message_loop() {
         // timeout is in microseconds
         int timeout = 1; /*microseconds*/
         int rc = zmq::poll(items, 1, timeout );
+        if (_shutdown) break;
         if (rc >= 0) { //success
             // TODO generalize on all sockets
             // number of events
@@ -409,7 +422,17 @@ void Kernel::message_loop() {
                 Message::free(msg_list);
                 try {
                     _shell_handler->execute(*_exec_ctx, request);
-                } catch (const std::exception & e) {
+                }
+                catch (const ShutdownRequestedException & srde) {
+                    LOG(INFO) << "Stopping kernel";
+                    this->stop();
+                    DLOG(INFO) << "Kernel stopped" ;
+                    this->shutdown();
+                    DLOG(INFO) << "Kernel shutdown" ;
+                    google::FlushLogFiles(google::INFO);
+                    return;
+                }
+                catch (const std::exception & e) {
                     /* */
                     LOG(ERROR) << "failed to execute message ";
                 }

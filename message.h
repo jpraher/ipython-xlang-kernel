@@ -24,6 +24,10 @@ std::ostream & _uuid_stringify(const uuid_t & uuid,
 std::istream & _uuid_parse(std::istream &is,
                            uuid_t &uuid);
 
+class ShutdownRequestedException : public std::exception {
+ public:
+};
+
 class Message {
 public:
     virtual bool serialize(const std::string & key,

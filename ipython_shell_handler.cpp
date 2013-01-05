@@ -297,6 +297,7 @@ void IPythonShellHandler::handle_execute_request(EContext & ctx,
 void IPythonShellHandler::handle_shutdown_request(EContext &ctx,  IPythonMessage * request)
 {
 
+    // whether the shutdown is final, or precedes a restart
     bool restart = json::get(request->content.boolean("restart"), false);
     IPythonMessage response;
     response.metadata.merge(request->metadata);
@@ -321,18 +322,7 @@ void IPythonShellHandler::handle_shutdown_request(EContext &ctx,  IPythonMessage
     send_stdout_and_err(ctx, request);
     ctx.shell().send(response);
 
-    DLOG(INFO) << "Stopping kernel" ;
-    _kernel->stop();
-    DLOG(INFO) << "Kernel stopped" ;
-    if (!restart) {
-        _kernel->shutdown();
-        DLOG(INFO) << "Has kernel shutdown: " << _kernel->has_shutdown();
-    }
-    else {
-        _kernel->start();
-        DLOG(INFO) << "Kernel restarted.";
-    }
-    google::FlushLogFiles(google::INFO);
+    throw ShutdownRequestedException();
 }
 
 
