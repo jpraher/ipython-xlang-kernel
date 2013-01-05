@@ -326,7 +326,7 @@ void Kernel::stop() {
 
     DLOG(INFO) << "After join _msg_loop_thread";
     if (_hb_thread.get()) {
-        _hb->close();
+        // _hb->close();
         _hb_thread->join();
         // _hb_thread.reset(NULL);
         // _run_hb_delegate.reset(NULL);
@@ -369,25 +369,31 @@ void _receive(zmq::socket_t & socket, std::list<zmq::message_t*> *result) {
 void Kernel::run_heartbeat() {
     DLOG(INFO) << "entering heartbeat run loop.";
     do  {
-        zmq::pollitem_t items [1];
-        /* First item refers to ØMQ socket 'socket' */
-        items[0].socket = (*_hb);
-        items[0].events = ZMQ_POLLIN;
-        int timeout = 1; /*microseconds*/
-        int rc = zmq::poll(items, 1, timeout);
-        if (rc >= 0) { //success
-            // TODO generalize on all sockets
-            // number of events
-            if (items[0].revents & ZMQ_POLLIN) {
-                do {
-                    zmq::message_t msg;
-                    // TODO: error handling
-                    _hb->recv(&msg);
-                    int flags = sockopt_rcvmore(*_hb) ? ZMQ_SNDMORE : 0;
-                    _hb->send(msg, flags);
-                    //result->push_back(msg);
-                } while (sockopt_rcvmore(*_hb));
+        try {
+            zmq::pollitem_t items [1];
+            /* First item refers to ØMQ socket 'socket' */
+            items[0].socket = (*_hb);
+            items[0].events = ZMQ_POLLIN;
+            int timeout = 1; /*microseconds*/
+            int rc = zmq::poll(items, 1, timeout);
+            if (rc >= 0) { //success
+                // TODO generalize on all sockets
+                // number of events
+                if (items[0].revents & ZMQ_POLLIN) {
+                    do {
+                        zmq::message_t msg;
+                        // TODO: error handling
+                        _hb->recv(&msg);
+                        int flags = sockopt_rcvmore(*_hb) ? ZMQ_SNDMORE : 0;
+                        _hb->send(msg, flags);
+                        //result->push_back(msg);
+                    } while (sockopt_rcvmore(*_hb));
+                }
             }
+        } catch (const std::exception &e) {
+            // Classification of exceptions that can be ignored
+            DLOG(INFO) << "caught exception " << e.what();
+            google::FlushLogFiles(google::INFO);
         }
     } while(!_shutdown);
     DLOG(INFO) << "leaving heartbeat run loop. ";
@@ -424,9 +430,8 @@ void Kernel::message_loop() {
                     _shell_handler->execute(*_exec_ctx, request);
                 }
                 catch (const ShutdownRequestedException & srde) {
-                    LOG(INFO) << "Stopping kernel";
-                    this->stop();
-                    DLOG(INFO) << "Kernel stopped" ;
+                    // DLOG(INFO) << "Kernel stopped" ;
+                    _msg_loop_thread->detach();
                     this->shutdown();
                     DLOG(INFO) << "Kernel shutdown" ;
                     google::FlushLogFiles(google::INFO);
