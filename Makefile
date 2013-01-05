@@ -3,12 +3,9 @@ CXXFLAGS+=-g -O0
 SHLIB_FLAGS=-dynamiclib
 SHLIB_EXT=.dylib
 
-.PHONY: all
+.PHONY: all clean
 
-#  delegate.h
-#  redir_test
-
-all: libipython-xlang-kernel${SHLIB_EXT} kernel json_test
+all: libipython-xlang-kernel${SHLIB_EXT} kernel json_test ioredir_test
 	echo "${CXXFLAGS}"
 
 
@@ -25,10 +22,17 @@ kernel2: api.h kernel2_main.o libipython-xlang-kernel${SHLIB_EXT}
 	$(CC) ${CFLAGS} -L. -lssl -lcrypto -lzmq -lglog -lipython-xlang-kernel kernel2_main.o  -o kernel2
 
 
-
 json_test: json.h json.cpp json_test.cpp
-	$(CXX) ${CXXFLAGS} -lglog json.cpp json_test.cpp -o json_test
+	$(CXX) ${CXXFLAGS} -lglog $^ -o $@
 
+ioredir_test: ioredir_test.cpp api.h ioredir.h libipython-xlang-kernel${SHLIB_EXT}
+	$(CXX) ${CXXFLAGS} -L. -lglog -lipython-xlang-kernel -lzmq $< -o $@
 
-# redir_test: json.h ioredir.cpp tthread/tinythread.o json.o delegate.h
-#	$(CXX) ${CXXFLAGS} -lglog  -lzmq ioredir.cpp tthread/tinythread.o json.o -o redir_test
+clean:
+	rm -f libipython-xlang-kernel${SHLIB_EXT}
+	rm -f *.o
+	rm -f tthread/*.o
+	rm -f json_test
+	rm -f ioredir_test
+	rm -f kernel kernel2
+

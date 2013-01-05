@@ -1,0 +1,296 @@
+
+
+* Configuration
+
+http://ipython.org/ipython-doc/dev/config/overview.html#config-overview
+
+- ipython_config.py in .ipython/profile_default
+- ipython_notebook_config.py in .ipython/profile_default
+
+#+BEGIN_EXAMPLE
+# sample ipython_config.py
+c = get_config()
+
+c.TerminalIPythonApp.display_banner = True
+c.InteractiveShellApp.log_level = 20
+c.InteractiveShellApp.extensions = [
+    'myextension'
+]
+c.InteractiveShellApp.exec_lines = [
+    'import numpy',
+    'import scipy'
+]
+c.InteractiveShellApp.exec_files = [
+    'mycode.py',
+    'fancy.ipy'
+]
+c.InteractiveShell.autoindent = True
+c.InteractiveShell.colors = 'LightBG'
+c.InteractiveShell.confirm_exit = False
+c.InteractiveShell.deep_reload = True
+c.InteractiveShell.editor = 'nano'
+c.InteractiveShell.xmode = 'Context'
+
+c.PromptManager.in_template  = 'In [\#]: '
+c.PromptManager.in2_template = '   .\D.: '
+c.PromptManager.out_template = 'Out[\#]: '
+c.PromptManager.justify = True
+
+c.PrefilterManager.multi_line_specials = True
+
+c.AliasManager.user_aliases = [
+ ('la', 'ls -al')
+]
+#+END_EXAMPLE
+
+* Overwriting the kernel
+
+#+BEGIN_EXAMPLE
+--existing kernel-625592ae-3c1b-4b3c-9c13-ed652c97b1de.json
+#+END_EXAMPLE
+
+#+BEGIN_EXAMPLE
+starting kernel 
+   {'extra_arguments': [u'123123',
+   u"--KernelApp.parent_appname='ipython-notebook'"], 
+   'cwd': u'/Users/jakob/extsrc/ipython'}
+#+END_EXAMPLE
+
+
+#+BEGIN_EXAMPLE
+
+/*
+# Build dict of handlers for message types
+        msg_types = [ 'execute_request', 'complete_request',
+                      'object_info_request', 'history_request',
+                      'connect_request', 'shutdown_request',
+                      'apply_request',
+                    ]
+ */
+
+
+/*
+execute_request
+
+content = {
+    # Source code to be executed by the kernel, one or more lines.
+'code' : str,
+
+# A boolean flag which, if True, signals the kernel to execute
+# this code as quietly as possible.  This means that the kernel
+# will compile the code with 'exec' instead of 'single' (so
+# sys.displayhook will not fire), and will *not*:
+#   - broadcast exceptions on the PUB socket
+#   - do any logging
+#   - populate any history
+#
+# The default is False.
+'silent' : bool,
+
+# A list of variable names from the user's namespace to be retrieved.  What
+# returns is a JSON string of the variable's repr(), not a python object.
+'user_variables' : list,
+
+# Similarly, a dict mapping names to expressions to be evaluated in the
+# user's dict.
+'user_expressions' : dict,
+
+# Some frontends (e.g. the Notebook) do not support stdin requests. If
+# raw_input is called from code executed from such a frontend, a
+# StdinNotImplementedError will be raised.
+'allow_stdin' : True,
+
+}
+
+ */
+
+
+/*
+ *
+ */
+
+
+/*
+/Users/jakob/.ipython/profile_default/security/kernel-633e91cf-aa08-465f-afdb-5391039a63b6.json
+{
+  "stdin_port": 60861,
+  "ip": "127.0.0.1",
+  "hb_port": 60862,
+  "key": "74547b55-31b9-483e-8c8a-b5191cb3f3c2",
+  "shell_port": 60859,
+  "transport": "tcp",
+  "iopub_port": 60860
+}
+*/
+
+#+END_EXAMPLE
+
+
+* Sample messages
+
+#+BEGIN_EXAMPLE
+IN
+shell content: {'user_variables': [], 'code': u'1\n', 'silent': False, 'allow_stdin': True, 'store_history': True, 'user_expressions': {}}
+OUT
+{
+'parent_header': 
+   {u'username': u'jakob', u'version': [0, 14, 0, u'dev'], u'session':
+u'40c92166-27ee-4beb-9466-a124622969f9', u'msg_type': u'execute_request', u'date': datetime.datetime(2012,
+11,30, 14, 18, 55, 993514), 
+u'msg_id':
+u'81b8fbba-f6fd-4288-9e7b-b7d6f25688ad'}, 'msg_type':
+u'execute_reply', 'msg_id': 'ec5cd4c1-df7c-4f67-b565-1008f43e986f', 
+'content': {'status': u'ok', 'execution_count': 0, 'user_variables':
+{}, 'payload': [], 'user_expressions': {}}, 'header': {'username':
+u'kernel', 'msg_type': u'execute_reply', 'msg_id':
+'ec5cd4c1-df7c-4f67-b565-1008f43e986f', 'version': [0, 14, 0, 'dev'],
+'session': u'000c8ee4-7d6b-4105-b210-ab3554f97673', 'date':
+datetime.datetime(2012, 11, 30, 14, 18, 56, 887309)}, 'tracker':
+<zmq.core.message.MessageTracker object at 0x109fec490>, 'metadata':
+{'dependencies_met': True, 'engine':
+u'c07ef91b-2c5f-4031-bffe-006173b035af', 'status': u'ok', 'started':
+datetime.datetime(2012, 11, 30, 14, 18, 56, 885196)}}
+#+END_EXAMPLE
+
+** Syntax error
+
+#+BEGIN_EXAMPLE
+In [3]: def f(x): 
+   ...: x + 1
+   ...: 
+shell content: {'user_variables': [], 'code': u'def f(x):\nx + 1\n', 'silent': False, 'allow_stdin': True, 'store_history': True, 'user_expressions': {}}
+_handle_recv
+_handle_recv
+_handle_recv
+_handle_recv
+ _handle_recv
+_handle_recv
+ipkernel reply {'parent_header': {u'username': u'jakob', u'version': [0, 14, 0, u'dev'], u'session': u'40c92166-27ee-4beb-9466-a124622969f9', u'msg_type': u'execute_request', u'date': datetime.datetime(2012, 11, 30, 14, 23, 48, 946533), u'msg_id': u'3aafe374-c47a-454b-a85c-cbf7c93e158e'}, 'msg_type': u'execute_reply', 'msg_id': '441a56c0-7904-4da7-9163-c8e596df2f07', 
+'content': {'status': u'error', 'ename': u'SyntaxError', 'user_variables': {}, 'evalue': u'invalid syntax (<ipython-input-2-a90aba598a82>, line 1)', 'traceback': [u'\x1b[0;36m  File \x1b[0;32m"<ipython-input-2-a90aba598a82>"\x1b[0;36m, line \x1b[0;32m1\x1b[0m\n\x1b[0;31m    def f(X)\x1b[0m\n\x1b[0m            ^\x1b[0m\n\x1b[0;31mSyntaxError\x1b[0m\x1b[0;31m:\x1b[0m invalid syntax\n'], 'execution_count': 2, 'user_expressions': {}, 'engine_info': {'engine_uuid': u'c07ef91b-2c5f-4031-bffe-006173b035af', 'method': u'execute', 'engine_id': -1}, 'payload': []}, 'header': {'username': u'kernel', 'msg_type': u'execute_reply', 'msg_id': '441a56c0-7904-4da7-9163-c8e596df2f07', 'version': [0, 14, 0, 'dev'], 'session': u'000c8ee4-7d6b-4105-b210-ab3554f97673', 'date': datetime.datetime(2012, 11, 30, 14, 23, 48, 955258)}, 'tracker': <zmq.core.message.MessageTracker object at 0x109fec490>, 'metadata': {'dependencies_met': True, 'engine': u'c07ef91b-2c5f-4031-bffe-006173b035af', 'status': u'error', 'started': datetime.datetime(2012, 11, 30, 14, 23, 48, 950794)}}
+
+enter handle execute reply!
+  File "<ipython-input-3-4f8a78f2b239>", line 2
+    x + 1
+    ^
+IndentationError: expected an indented block
+#+END_EXAMPLE
+
+
+** Success 
+#+BEGIN_EXAMPLE
+
+In [7]: def f(x):
+   ...:   x = x + 1
+   ...:   return x
+   ...: 
+shell content: {'user_variables': [], 'code': u'def f(x):\n  x = x + 1\n  return x\n', 'silent': False, 'allow_stdin': True, 'store_history': True, 'user_expressions': {}}
+_handle_recv
+_handle_recv
+_handle_recv
+_handle_recv
+_handle_recv
+ipkernel reply {'parent_header': {u'username': u'jakob', u'version': [0, 14, 0, u'dev'], u'session': u'40c92166-27ee-4beb-9466-a124622969f9', u'msg_type': u'execute_request', u'date': datetime.datetime(2012, 11, 30, 14, 26, 41, 120479), u'msg_id': u'3cb99c4e-6ee8-4dc0-8d9f-693513a0d3f8'}, 'msg_type': u'execute_reply', 'msg_id': '9afcaf89-39b8-45e9-8676-582939896ac2', 'content': {'status': u'error', 'ename': u'IndentationError', 'user_variables': {}, 'evalue': u'expected an indented block (<ipython-input-6-ff7dc5ee0dcb>, line 2)', 'traceback': [u'\x1b[0;36m  File \x1b[0;32m"<ipython-input-6-ff7dc5ee0dcb>"\x1b[0;36m, line \x1b[0;32m2\x1b[0m\n\x1b[0;31m    x = x + 1\x1b[0m\n\x1b[0m    ^\x1b[0m\n\x1b[0;31mIndentationError\x1b[0m\x1b[0;31m:\x1b[0m expected an indented block\n'], 'execution_count': 6, 'user_expressions': {}, 'engine_info': {'engine_uuid': u'c07ef91b-2c5f-4031-bffe-006173b035af', 'method': u'execute', 'engine_id': -1}, 'payload': []}, 'header': {'username': u'kernel', 'msg_type': u'execute_reply', 'msg_id': '9afcaf89-39b8-45e9-8676-582939896ac2', 'version': [0, 14, 0, 'dev'], 'session': u'000c8ee4-7d6b-4105-b210-ab3554f97673', 'date': datetime.datetime(2012, 11, 30, 14, 26, 41, 134653)}, 'tracker': <zmq.core.message.MessageTracker object at 0x109fec490>, 'metadata': {'dependencies_met': True, 'engine': u'c07ef91b-2c5f-4031-bffe-006173b035af', 'status': u'error', 'started': datetime.datetime(2012, 11, 30, 14, 26, 41, 124091)}}
+enter handle execute reply!
+#+END_EXAMPLE
+
+
+
+In [9]: def f(x):                                                                                                                                                                   x = x + 1                                                                                                                                                                         return x
+   ...: 
+shell content: {'user_variables': [], 'code': u'def f(x):\n  x = x + 1\n  return x\n', 'silent': False, 'allow_stdin': True, 'store_history': True, 'user_expressions': {}}
+_handle_recv
+_handle_recv
+_handle_recv
+_handle_recv
+_handle_recv
+ipkernel reply {'parent_header': {u'username': u'jakob', u'version': [0, 14, 0, u'dev'], u'session': u'40c92166-27ee-4beb-9466-a124622969f9', u'msg_type': u'execute_request', u'date': datetime.datetime(2012, 11, 30, 14, 34, 7, 256475), u'msg_id': u'1995fff3-8cae-401a-9ef4-a313a465e076'}, 'msg_type': u'execute_reply', 'msg_id': '03127250-f93a-48e7-8bbf-406e6dec6818', 'content': {'status': u'ok', 'execution_count': 8, 'user_variables': {}, 'payload': [], 'user_expressions': {}}, 'header': {'username': u'kernel', 'msg_type': u'execute_reply', 'msg_id': '03127250-f93a-48e7-8bbf-406e6dec6818', 'version': [0, 14, 0, 'dev'], 'session': u'000c8ee4-7d6b-4105-b210-ab3554f97673', 'date': datetime.datetime(2012, 11, 30, 14, 34, 7, 267270)}, 'tracker': <zmq.core.message.MessageTracker object at 0x109fec490>, 'metadata': {'dependencies_met': True, 'engine': u'c07ef91b-2c5f-4031-bffe-006173b035af', 'status': u'ok', 'started': datetime.datetime(2012, 11, 30, 14, 34, 7, 261952)}}
+enter handle execute reply!
+
+In [10]: x = 1
+shell content: {'user_variables': [], 'code': u'x = 1\n', 'silent': False, 'allow_stdin': True, 'store_history': True, 'user_expressions': {}}
+_handle_recv
+_handle_recv
+_handle_recv
+_handle_recv
+ _handle_recv
+ipkernel reply {'parent_header': {u'username': u'jakob', u'version': [0, 14, 0, u'dev'], u'session': u'40c92166-27ee-4beb-9466-a124622969f9', u'msg_type': u'execute_request', u'date': datetime.datetime(2012, 11, 30, 14, 34, 42, 422668), u'msg_id': u'b607c0b1-3f29-4c8d-b917-4dfab16d93c0'}, 'msg_type': u'execute_reply', 'msg_id': '0bb60ea6-c4a6-4c03-a16c-9186475b30e5', 'content': {'status': u'ok', 'execution_count': 9, 'user_variables': {}, 'payload': [], 'user_expressions': {}}, 'header': {'username': u'kernel', 'msg_type': u'execute_reply', 'msg_id': '0bb60ea6-c4a6-4c03-a16c-9186475b30e5', 'version': [0, 14, 0, 'dev'], 'session': u'000c8ee4-7d6b-4105-b210-ab3554f97673', 'date': datetime.datetime(2012, 11, 30, 14, 34, 42, 430425)}, 'tracker': <zmq.core.message.MessageTracker object at 0x109fec490>, 'metadata': {'dependencies_met': True, 'engine': u'c07ef91b-2c5f-4031-bffe-006173b035af', 'status': u'ok', 'started': datetime.datetime(2012, 11, 30, 14, 34, 42, 426150)}}
+enter handle execute reply!
+
+In [11]: x + 2
+shell content: {'user_variables': [], 'code': u'x + 2\n', 'silent': False, 'allow_stdin': True, 'store_history': True, 'user_expressions': {}}
+_handle_recv
+_handle_recv
+_handle_recv
+_handle_recv
+_handle_recv
+_handle_recv
+ipkernel reply {'parent_header': {u'username': u'jakob', u'version': [0, 14, 0, u'dev'], u'session': u'40c92166-27ee-4beb-9466-a124622969f9', u'msg_type': u'execute_request', u'date': datetime.datetime(2012, 11, 30, 14, 35, 2, 669283), u'msg_id': u'73bf3ba8-6929-4c86-95c7-ca4d7d922ff1'}, 'msg_type': u'execute_reply', 'msg_id': 'f62eae94-02ab-4c9f-94bb-054083dcd62f', 'content': {'status': u'ok', 'execution_count': 10, 'user_variables': {}, 'payload': [], 'user_expressions': {}}, 'header': {'username': u'kernel', 'msg_type': u'execute_reply', 'msg_id': 'f62eae94-02ab-4c9f-94bb-054083dcd62f', 'version': [0, 14, 0, 'dev'], 'session': u'000c8ee4-7d6b-4105-b210-ab3554f97673', 'date': datetime.datetime(2012, 11, 30, 14, 35, 2, 683292)}, 'tracker': <zmq.core.message.MessageTracker object at 0x109fec490>, 'metadata': {'dependencies_met': True, 'engine': u'c07ef91b-2c5f-4031-bffe-006173b035af', 'status': u'ok', 'started': datetime.datetime(2012, 11, 30, 14, 35, 2, 672913)}}
+Out[11]: 3
+enter handle execute reply!
+
+In [12]: 9999999999999
+shell content: {'user_variables': [], 'code': u'9999999999999\n', 'silent': False, 'allow_stdin': True, 'store_history': True, 'user_expressions': {}}
+_handle_recv
+_handle_recv
+_handle_recv
+_handle_recv
+_handle_recv
+_handle_recv
+ipkernel reply {'parent_header': {u'username': u'jakob', u'version': [0, 14, 0, u'dev'], u'session': u'40c92166-27ee-4beb-9466-a124622969f9', u'msg_type': u'execute_request', u'date': datetime.datetime(2012, 11, 30, 14, 35, 6, 830277), u'msg_id': u'96478a50-abac-4e0e-8631-c2f18120ad59'}, 'msg_type': u'execute_reply', 'msg_id': 'aef07987-1abb-4f0c-a9b5-c00a129319b1', 'content': {'status': u'ok', 'execution_count': 11, 'user_variables': {}, 'payload': [], 'user_expressions': {}}, 'header': {'username': u'kernel', 'msg_type': u'execute_reply', 'msg_id': 'aef07987-1abb-4f0c-a9b5-c00a129319b1', 'version': [0, 14, 0, 'dev'], 'session': u'000c8ee4-7d6b-4105-b210-ab3554f97673', 'date': datetime.datetime(2012, 11, 30, 14, 35, 6, 845359)}, 'tracker': <zmq.core.message.MessageTracker object at 0x109fec490>, 'metadata': {'dependencies_met': True, 'engine': u'c07ef91b-2c5f-4031-bffe-006173b035af', 'status': u'ok', 'started': datetime.datetime(2012, 11, 30, 14, 35, 6, 833256)}}
+Out[12]: 9999999999999
+enter handle execute reply!
+
+
+* How output is produced - PRINT_EXEC and sys.displayhook
+
+The mode argument specifies what kind of code must be compiled; it can
+be 'exec' if source consists of a sequence of statements, 'eval' if it
+consists of a single expression, or 'single' if it consists of a
+single interactive statement (in the latter case, expression
+statements that evaluate to something other than None will be
+printed).
+#+BEGIN_EXAMPLE
+>>> x = compile("1", "t", "exec")
+>>> import dis
+>>> dis.dis(x)
+  1           0 LOAD_CONST               0 (None)
+              3 RETURN_VALUE        
+>>> exec x
+>>> t = exec x
+  File "<stdin>", line 1
+    t = exec x
+           ^
+SyntaxError: invalid syntax
+>>>  exec x
+KeyboardInterrupt
+>>> y = compile("1", "t", "single")
+>>> dis.dis(y)
+  1           0 LOAD_CONST               0 (1)
+              3 PRINT_EXPR          
+              4 LOAD_CONST               1 (None)
+              7 RETURN_VALUE        
+>>> exec y
+#+END_EXAMPLE
+
+
+#+BEGIN_EXAMPLE
+{'parent_header': {u'username': u'username', u'msg_id': u'7D2E3FB51AE34EE98368964CF293E227', u'msg_type': u'execute_request', u'session': u'12F65C878DCB4E7D8C3A2B2E2A18A35B'}, 'msg_type': u'execute_reply', 'msg_id': 'f5db33dd-d663-49bf-a6a1-918c71f3bfda', 'content': {'status': u'ok', 'execution_count': 2, 'user_variables': {}, 'payload': [], 'user_expressions': {}}, 'header': {'username': u'kernel', 'msg_type': u'execute_reply', 'msg_id': 'f5db33dd-d663-49bf-a6a1-918c71f3bfda', 'version': [0, 14, 0, 'dev'], 'session': u'80d02d11-7014-4ddc-be5b-f09ee35d1872', 'date': datetime.datetime(2012, 11, 30, 23, 5, 57, 429062)}, 'tracker': <zmq.core.message.MessageTracker object at 0x108ec74d0>, 'metadata': {'dependencies_met': True, 'engine': u'd4a2d20f-d361-4653-b9be-c1762722d274', 'status': u'ok', 'started': datetime.datetime(2012, 11, 30, 23, 5, 57, 415624)}}
+node list []
+compile single <_ast.Interactive object at 0x1091b34d0>
+Running code <code object <module> at 0x1091a06b0, file "<ipython-input-3-4d095eeac8ed>", line 1>
+  1           0 LOAD_CONST               0 (17)
+              3 PRINT_EXPR          
+              4 LOAD_CONST               1 (None)
+              7 RETURN_VALUE        
+
+Out[3]:
+
+17
+msg 
+{'parent_header': {u'username': u'username', u'msg_id': u'F293C77D85E043FE8F3DAE9A1CFD1681', u'msg_type': u'execute_request', u'session': u'12F65C878DCB4E7D8C3A2B2E2A18A35B'}, 
+'msg_type': u'pyout', 'msg_id': '0fe40f5f-9aee-4d35-9317-7d8965e1bba5',
+'content': {'execution_count': 3, 'data': {u'text/plain': '17'}}, 
+'header': {'username': u'kernel', 'msg_type': u'pyout', 'msg_id':
+'0fe40f5f-9aee-4d35-9317-7d8965e1bba5', 'version': [0, 14, 0, 'dev'], 
+'session': u'80d02d11-7014-4ddc-be5b-f09ee35d1872', 'date': datetime.datetime(2012, 11, 30, 23, 6, 2, 945854)}, 'metadata': {}}
+#+END_EXAMPLE
