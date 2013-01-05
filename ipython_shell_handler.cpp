@@ -296,6 +296,8 @@ void IPythonShellHandler::handle_execute_request(EContext & ctx,
 
 void IPythonShellHandler::handle_shutdown_request(EContext &ctx,  IPythonMessage * request)
 {
+
+    bool restart = json::get(request->content.boolean("restart"), false);
     IPythonMessage response;
     response.metadata.merge(request->metadata);
     response.header.set_string("msg_id", _generate_uuid());
@@ -311,7 +313,7 @@ void IPythonShellHandler::handle_shutdown_request(EContext &ctx,  IPythonMessage
     // response.parent = request.header
     response.parent.merge(request->header);
 
-    response.content.set_boolean("restart",false);
+    response.content.set_boolean("restart",restart);
 
     DLOG(INFO) << "RESPONSE header  >" << response.header.to_str();
     DLOG(INFO) << "RESPONSE content >" << response.content.to_str();
@@ -319,9 +321,17 @@ void IPythonShellHandler::handle_shutdown_request(EContext &ctx,  IPythonMessage
     send_stdout_and_err(ctx, request);
     ctx.shell().send(response);
 
-    DLOG(INFO) << "Perform shutdown!" ;
-    _kernel->shutdown();
-    DLOG(INFO) << "Has kernel shutdown: " << _kernel->has_shutdown();
+    DLOG(INFO) << "Stopping kernel" ;
+    _kernel->stop();
+    DLOG(INFO) << "Kernel stopped" ;
+    if (!restart) {
+        _kernel->shutdown();
+        DLOG(INFO) << "Has kernel shutdown: " << _kernel->has_shutdown();
+    }
+    else {
+        _kernel->start();
+        DLOG(INFO) << "Kernel restarted.";
+    }
     google::FlushLogFiles(google::INFO);
 }
 

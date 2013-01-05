@@ -74,6 +74,8 @@ public:
     ~Kernel();
 
     void start();
+    void stop();
+
     void shutdown();
 
     void message_loop();
@@ -94,16 +96,17 @@ private:
 
     std::string _ident;
     std::string _ip;
-    zmq::socket_t _hb;
+    scoped_ptr<zmq::socket_t> _hb;
 
-    zmq::socket_t _stdin;
-    zmq::socket_t _iopub;
-    zmq::socket_t _shell;
-    SocketChannel _stdinChannel,
-                  _iopubChannel,
-                  _shellChannel;
+    scoped_ptr<zmq::socket_t> _stdin;
+    scoped_ptr<zmq::socket_t> _iopub;
+    scoped_ptr<zmq::socket_t> _shell;
+    scoped_ptr<SocketChannel>
+        _stdinChannel,
+        _iopubChannel,
+        _shellChannel;
 
-    EContext _exec_ctx;
+    scoped_ptr<EContext> _exec_ctx;
     scoped_ptr<ExecuteHandler> _shell_handler;
 
 

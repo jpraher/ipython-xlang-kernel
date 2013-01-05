@@ -216,14 +216,7 @@ Kernel::Kernel(int number_of_io_threads,
     : _ctx(new zmq::context_t(number_of_io_threads)),
       _tcp_info(info),
       _ident(_generate_uuid()),
-      _hb(*_ctx, ZMQ_REP),
-      _stdin(*_ctx, ZMQ_ROUTER),
-      _iopub(*_ctx, ZMQ_PUB),
-      _shell(*_ctx, ZMQ_ROUTER),
       _hmackey_string(info.key()),
-      _stdinChannel(_stdin, info.key()),
-      _iopubChannel(_iopub, info.key()),
-      _shellChannel(_shell, info.key()),
       _shell_handler(NULL),
       _ip(info.ip()),
       _shutdown(false),
@@ -232,10 +225,8 @@ Kernel::Kernel(int number_of_io_threads,
       _hb_count(0),
       _hb_thread(NULL),
       _run_hb_delegate(NULL),
-      _stdout_redirector(STDOUT_FILENO/*delegate1_t<EContext, void, const std::string&>(&_exec_ctx, &EContext::handle_stdout)*/),
-      _stderr_redirector(STDERR_FILENO /*delegate1_t<EContext, void, const std::string&>(&_exec_ctx, &EContext::handle_stderr)*/),
-      _exec_ctx(_ident,_iopubChannel, _shellChannel, _stdout_redirector, _stderr_redirector)
-
+      _stdout_redirector(STDOUT_FILENO),
+      _stderr_redirector(STDERR_FILENO)
 {
 }
 
@@ -271,10 +262,25 @@ void Kernel::start() {
     if (_started) {
         return;
     }
-    _bind_tcp(_hb, _ip, _tcp_info.hb_port());
-    _bind_tcp(_stdin, _ip, _tcp_info.stdin_port());
-    _bind_tcp(_iopub, _ip, _tcp_info.iopub_port());
-    _bind_tcp(_shell, _ip, _tcp_info.shell_port());
+    _shutdown = false;
+    _hb.reset(new zmq::socket_t(*_ctx, ZMQ_REP));
+    _bind_tcp(*_hb, _ip, _tcp_info.hb_port());
+
+    _stdin.reset(new zmq::socket_t(*_ctx, ZMQ_ROUTER));
+    _bind_tcp(*_stdin, _ip, _tcp_info.stdin_port());
+
+    _iopub.reset(new zmq::socket_t(*_ctx, ZMQ_PUB));
+    _bind_tcp(*_iopub, _ip, _tcp_info.iopub_port());
+
+    _shell.reset(new zmq::socket_t(*_ctx, ZMQ_ROUTER));
+    _bind_tcp(*_shell, _ip, _tcp_info.shell_port());
+
+    _stdinChannel.reset(new SocketChannel(*_stdin,  _hmackey_string));
+    _iopubChannel.reset(new SocketChannel(*_iopub,  _hmackey_string));
+    _shellChannel.reset(new SocketChannel(*_shell,  _hmackey_string));
+
+    _exec_ctx.reset(new EContext(_ident,*_iopubChannel, *_shellChannel,
+                                 _stdout_redirector, _stderr_redirector));
 
     _run_hb_delegate.reset(new delegate_t<Kernel>(this, &Kernel::run_heartbeat));
     _hb_thread.reset(new thread(_run_hb_delegate->dispatch, _run_hb_delegate.get()));
@@ -286,6 +292,7 @@ void Kernel::start() {
     _msg_loop_thread.reset(new thread(_msg_loop_delegate->dispatch, _msg_loop_delegate.get()));
 
     _started = true;
+    _shutted_down = false;
 }
 
 
@@ -293,8 +300,9 @@ void Kernel::set_shell_handler(ExecuteHandler* handler) {
     _shell_handler.reset(handler);
 }
 
+void Kernel::stop() {
+    if (!_started) return;
 
-void Kernel::shutdown() {
     if (_shutdown) return;
     _shutdown = true;
     // _stderr_redirector.stop();
@@ -306,7 +314,23 @@ void Kernel::shutdown() {
     if (_hb_thread.get()) {
         _hb_thread->join();
     }
+
+    _exec_ctx.reset(NULL);
+    _stdinChannel.reset(NULL);
+    _iopubChannel.reset(NULL);
+    _shellChannel.reset(NULL);
+    _hb.reset(NULL);
+    _iopub.reset(NULL);
+    _stdin.reset(NULL);
+    _shell.reset(NULL);
+
     DLOG(INFO) << "After join _hb_thread";
+    _started = false;
+
+}
+
+void Kernel::shutdown() {
+    this->stop();
     _shutted_down = true;
     DLOG(INFO) << "Setting shutted_down true";
 }
@@ -335,7 +359,7 @@ void Kernel::run_heartbeat() {
     do  {
         zmq::pollitem_t items [1];
         /* First item refers to ØMQ socket 'socket' */
-        items[0].socket = _hb;
+        items[0].socket = (*_hb);
         items[0].events = ZMQ_POLLIN;
         int timeout = 1; /*microseconds*/
         int rc = zmq::poll(items, 1, timeout);
@@ -346,11 +370,11 @@ void Kernel::run_heartbeat() {
                 do {
                     zmq::message_t msg;
                     // TODO: error handling
-                    _hb.recv(&msg);
-                    int flags = sockopt_rcvmore(_hb) ? ZMQ_SNDMORE : 0;
-                    _hb.send(msg, flags);
+                    _hb->recv(&msg);
+                    int flags = sockopt_rcvmore(*_hb) ? ZMQ_SNDMORE : 0;
+                    _hb->send(msg, flags);
                     //result->push_back(msg);
-                } while (sockopt_rcvmore(_hb));
+                } while (sockopt_rcvmore(*_hb));
             }
         }
     } while(!_shutdown);
@@ -362,7 +386,7 @@ void Kernel::message_loop() {
     do  {
         zmq::pollitem_t items [1];
         /* First item refers to ØMQ socket 'socket' */
-        items[0].socket = _shell;
+        items[0].socket = (*_shell);
         items[0].events = ZMQ_POLLIN;
         // items[1].socket = _hb;
         // items[1].events = ZMQ_POLLIN;
@@ -376,15 +400,15 @@ void Kernel::message_loop() {
             if (items[0].revents & ZMQ_POLLIN) {
                 std::list<zmq::message_t*> msg_list;
                 // std::list<zmq::message_t*> response;
-                DLOG(INFO) << "receiving";
-                _receive(_shell,&msg_list);
-                DLOG(INFO) << "received " << msg_list.size() << std::endl;
+                // DLOG(INFO) << "receiving";
+                _receive(*_shell,&msg_list);
+                // DLOG(INFO) << "received " << msg_list.size() << std::endl;
                 Message * request = _shell_handler->create_request();
                 assert(request != NULL);
                 request->deserialize(msg_list);
                 Message::free(msg_list);
                 try {
-                    _shell_handler->execute(_exec_ctx, request);
+                    _shell_handler->execute(*_exec_ctx, request);
                 } catch (const std::exception & e) {
                     /* */
                     LOG(ERROR) << "failed to execute message ";

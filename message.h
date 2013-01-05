@@ -58,9 +58,6 @@ public:
     const std::string & ident() const;
     const std::string & session_id()  const;
 
-    void handle_stdout(const std::string &s);
-    void handle_stderr(const std::string &s);
-
     std::string stdout();
     std::string stderr();
 
@@ -71,8 +68,6 @@ private:
     Channel * _shell;
     redirector *_stdout_redir;
     redirector *_stderr_redir;
-    std::ostringstream _stdout_oss;
-    std::ostringstream _stderr_oss;
 };
 
 class ExecuteHandler {

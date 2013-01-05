@@ -93,20 +93,7 @@ EContext::EContext(const std::string & ident,
 {
 }
 
-void EContext::handle_stdout(const std::string &s) {
-    _stdout_oss << s;
-    _stdout_oss.flush();
-}
-void EContext::handle_stderr(const std::string &s) {
-    _stderr_oss << s;
-    _stderr_oss.flush();
-}
-
 std::string EContext::stdout() {
-    /*
-    std::string s = _stdout_oss.str();
-    _stdout_oss.str("");
-    */
     std::string s;
     if (_stdout_redir) {
         bool result = _stdout_redir->receive(s);
@@ -115,8 +102,6 @@ std::string EContext::stdout() {
 }
 
 std::string EContext::stderr() {
-    // std::string s = _stderr_oss.str();
-    // _stderr_oss.str("");
     std::string s;
     if (_stderr_redir) {
         bool result = _stderr_redir->receive(s);
