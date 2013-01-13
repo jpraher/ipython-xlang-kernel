@@ -113,6 +113,34 @@ std::list<zmq::message_t*>::const_iterator _begin_msg(const std::list<zmq::messa
 
 }
 
+
+
+bool try_set(json::object_value* dest, const zmq::message_t* msg) {
+    assert(dest != NULL);
+    std::string s((char*)msg->data(), msg->size());
+    std::istringstream is(s);
+    json::parser parser(is);
+    if (dest->empty()) {
+        if (!parser.parse(dest)) {
+            return false;
+        }
+    }
+    else {
+        json::object_value t;
+        if (!parser.parse(&t)) {
+            return false;
+        }
+        // t subsumes matching spec
+        if (t.contains(*dest)) {
+            dest->merge(t);
+        } else {
+            return false;
+        }
+    }
+    return true;
+}
+
+
 // to_send: ['<IDS|MSG>', 'b3f7486530469f95104f5d08b671ab49', '{"username":"jakob","msg_type":"execute_request","msg_id":"cbf262c7-81ff-4c0d-824f-8a6ccdb6d35b","version":[0,14,0,"dev"],"session":"8031b811-0d72-4a5f-96ab-83867665cc96","date":"2012-12-03T22:43:28.182231"}', '{}', '{}', '{"user_variables":[],"code":"1\\n","silent":false,"allow_stdin":true,"store_history":true,"user_expressions":{}}']
 bool IPythonMessage::deserialize(const std::list<zmq::message_t*> & messages) {
 
@@ -128,34 +156,30 @@ bool IPythonMessage::deserialize(const std::list<zmq::message_t*> & messages) {
     msg++;
     if (msg == messages.end()) return false;
     {
-        std::string s((char*)(*msg)->data(), (*msg)->size());
-        std::istringstream is(s);
-        json::parser parser(is);
-        parser.parse(&header);
+        if (!try_set(&header, *msg)) {
+            return false;
+        }
     }
     msg++;
     if (msg == messages.end()) return false;
     {
-        std::string s((char*)(*msg)->data(), (*msg)->size());
-        std::istringstream is(s);
-        json::parser parser(is);
-        parser.parse(&parent);
+        if (!try_set(&parent, *msg)) {
+            return false;
+        }
     }
     msg++;
     if (msg == messages.end()) return false;
     {
-        std::string s((char*)(*msg)->data(), (*msg)->size());
-        std::istringstream is(s);
-        json::parser parser(is);
-        parser.parse(&metadata);
+        if (!try_set(&metadata, *msg)) {
+            return false;
+        }
     }
     msg++;
     if (msg == messages.end()) return false;
     {
-        std::string s((char*)(*msg)->data(), (*msg)->size());
-        std::istringstream is(s);
-        json::parser parser(is);
-        parser.parse(&content);
+        if (!try_set(&content, *msg)) {
+            return false;
+        }
     }
     msg++;
     return msg == messages.end();

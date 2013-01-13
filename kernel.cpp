@@ -48,6 +48,15 @@ void _send(zmq::socket_t & socket, std::list<zmq::message_t*> &msg_list) {
     }
 }
 
+void _receive(zmq::socket_t & socket, std::list<zmq::message_t*> *result) {
+    do {
+        zmq::message_t * msg = new zmq::message_t();
+        // TODO: error handling
+        socket.recv(msg);
+        result->push_back(msg);
+    } while (sockopt_rcvmore(socket));
+}
+
 SocketChannel::SocketChannel(zmq::socket_t & sock, const std::string &key)
     : _socket(&sock),
       _key(key)
@@ -69,6 +78,28 @@ void SocketChannel::send(const Message & message) {
         *it = NULL;
     }
 }
+
+/*
+  let's assume that there is a
+ */
+bool SocketChannel::recv(Message *message, int timeout) {
+    assert(_socket);
+    assert(message);
+
+    _socket->setsockopt(ZMQ_RCVTIMEO, &timeout, sizeof(timeout));
+    std::list<zmq::message_t*> msg_list;
+    _receive(*_socket, &msg_list);
+    bool ok = message->deserialize(msg_list);
+    // free messages
+    for (std::list<zmq::message_t*>::iterator it = msg_list.begin();
+         it != msg_list.end();
+         ++it) {
+        if (*it) delete *it;
+        *it = NULL;
+    }
+}
+
+
 
 
 
@@ -283,7 +314,7 @@ void Kernel::start() {
     _shellChannel.reset(new SocketChannel(*_shell,  _hmackey_string));
     DLOG(INFO) << "channels initialized";
 
-    _exec_ctx.reset(new EContext(_ident,*_iopubChannel, *_shellChannel,
+    _exec_ctx.reset(new EContext(_ident,*_iopubChannel, *_shellChannel, *_stdinChannel,
                                  _stdout_redirector, _stderr_redirector));
 
     _shutdown = false;
@@ -356,14 +387,6 @@ bool Kernel::has_shutdown() {
 
 
 
-void _receive(zmq::socket_t & socket, std::list<zmq::message_t*> *result) {
-    do {
-        zmq::message_t * msg = new zmq::message_t();
-        // TODO: error handling
-        socket.recv(msg);
-        result->push_back(msg);
-    } while (sockopt_rcvmore(socket));
-}
 
 
 void Kernel::run_heartbeat() {
@@ -457,4 +480,8 @@ const std::string & Kernel::ident() const  {
 }
 const std::string & Kernel::key() const  {
     return _hmackey_string;
+}
+
+EContext * Kernel::execution_context() {
+    return _exec_ctx.get();
 }

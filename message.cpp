@@ -82,11 +82,13 @@ void Message::free(std::list<zmq::message_t*> & messages) {
 EContext::EContext(const std::string & ident,
                    Channel & io,
                    Channel & shell,
+                   Channel & in,
                    redirector & stdout_redirector,
                    redirector & stderr_redirector)
     : _session_id(_generate_uuid()),
       _ident(ident),
       _io(&io),
+      _in(&in),
       _shell(&shell),
       _stdout_redir(&stdout_redirector),
       _stderr_redir(&stderr_redirector)
@@ -124,4 +126,9 @@ Channel & EContext::io() {
 Channel & EContext::shell() {
     assert(_shell);
     return *_shell;
+}
+
+Channel & EContext::in() {
+    assert(_in);
+    return *_in;
 }

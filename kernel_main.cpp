@@ -35,7 +35,8 @@ typedef int (*ExecuteRequestFunction)(void * ctx,
                                       ipython_execute_response_t * response
                                       );
 */
-int execute_request(void * ctx,
+int execute_request(shell_handler_t * s,
+                    void * ctx,
                     const ipython_execute_request_t * request,
                     ipython_execute_response_t * response) {
 

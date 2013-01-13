@@ -9,7 +9,7 @@ all: libipython-xlang-kernel${SHLIB_EXT} kernel json_test ioredir_test
 	echo "${CXXFLAGS}"
 
 
-libipython-xlang-kernel${SHLIB_EXT}: kernel.h kernel.o json.o ipython_message.o hmac.o message.o tthread/tinythread.o ioredir.o delegate.h ipython_shell_handler.h ipython_shell_handler.o api.o
+libipython-xlang-kernel${SHLIB_EXT}: kernel.h kernel.o json.o ipython_message.o hmac.o message.o tthread/tinythread.o ioredir.o delegate.h ipython_shell_handler.h ipython_shell_handler.o api.o api.h
 	$(CXX) ${CXXFLAGS} ${SHLIB_FLAGS} -lssl -lcrypto -lzmq -lglog api.o kernel.o json.o ipython_message.o hmac.o message.o ipython_shell_handler.o tthread/tinythread.o ioredir.o \
 	-o libipython-xlang-kernel${SHLIB_EXT}
 
@@ -35,4 +35,3 @@ clean:
 	rm -f json_test
 	rm -f ioredir_test
 	rm -f kernel kernel2
-

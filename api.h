@@ -49,15 +49,23 @@ struct ipython_execute_response {
 
 } ipython_execute_response_t;
 
+// opaque structure
+// typedef struct kernel_env_t;
+typedef struct kernel kernel_t;
+typedef struct shell_handler shell_handler_t;
+typedef struct ioredir ioredir_t;
 
 
 
-typedef int (*ServiceFunction)(void * ctx,
+
+typedef int (*ServiceFunction)(shell_handler_t * s,
+                               void * ctx,
                                const ipython_message_t * request,
                                ipython_message_t       * response
                                );
 
-typedef int (*ExecuteRequestFunction)(void * ctx,
+typedef int (*ExecuteRequestFunction)(shell_handler_t * s,
+                                      void * ctx,
                                       const ipython_execute_request_t * request,
                                       ipython_execute_response_t      * response
                                       );
@@ -71,12 +79,6 @@ struct handler_table {
 } handler_table_t;
 
 
-
-// opaque structure
-// typedef struct kernel_env_t;
-typedef struct kernel kernel_t;
-typedef struct shell_handler shell_handler_t;
-typedef struct ioredir ioredir_t;
 
 #ifdef __cplusplus
 extern "C" {
@@ -99,8 +101,15 @@ int kernel_has_shutdown(kernel_t*);
  * IPython shell handler owned by this kernel
  */
 shell_handler_t *new_ipython_shell_handler(kernel_t *t);
-// void free_ipython_shell_handler(shell_handler_t*);
+
 void ipython_shell_handler_set_handlers(shell_handler_t* s, const handler_table_t * handler);
+
+/* */
+int ipython_raw_input(shell_handler_t * s,
+                      const char * prompt,
+                      char ** value,
+                      int * len
+                      );
 
 ioredir_t * new_ioredir_stdout();
 ioredir_t * new_ioredir(int fileno);

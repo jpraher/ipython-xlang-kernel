@@ -65,7 +65,7 @@ namespace json {
         assert(o->array("array")->boolean(2) != NULL);
         assert(*o->array("array")->boolean(2));
 
-        std::string json_test4 = "{\"user_variables\": [], \"code\": \"f = 1\\n\", \"silent\": false, \"allow_stdin\": true, \"store_history\": true, \"user_expressions\": {}}";
+        std::string json_test4 = "{\"user_variables\": [], \"code\": \"f = 1\\n\", \"silent\": false, \"allow_stdin\": true, \"store_history\": true, \"user_expressions\": {\"a\": 1}}";
         std::istringstream is4(json_test4);
         std::cout << is4.str() << std::endl;
         std::cout << json_test4.size() << std::endl;
@@ -75,7 +75,31 @@ namespace json {
             std::cout << "parsed root4" << std::endl;
             root4->stringify(std::cout) << std::endl;
         }
+
+
+        std::string json_test5 = "{\"user_variables\": [], \"code\": \"f = 1\\n\",  \"allow_stdin\": true, \"store_history\": true, \"user_expressions\": {}}";
+        std::istringstream is5(json_test5);
+        std::cout << is5.str() << std::endl;
+        std::cout << json_test5.size() << std::endl;
+        json::parser parser5(is5);
+        value * root5 = NULL;
+        bool	ok = false;
+        ok = parser5.parse(&root5) && root5;
+        assert(ok);
+        std::cout << "parsed root5" << std::endl;
+        assert(root5->contains(root5));
+        std::cout << "root5 contains root5" << std::endl;
+        assert(root4->contains(root5));
+        std::cout << "root4 contains root5" << std::endl;
+        assert(!root5->contains(root4));
+        std::cout << "root5 not contains root4" << std::endl;
+        assert(*root5 == *root5);
+        std::cout << "root5 == root5" << std::endl;
+        assert(!(*root4 == *root5));
+        std::cout << "root4 != root5" << std::endl;
     }
+
+
 
 
 }

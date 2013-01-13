@@ -38,6 +38,8 @@ const array_value *  value::array() const       { return NULL; }
 object_value *       value::mutable_object()    { return NULL; }
 const object_value * value::object() const      { return NULL; }
 
+bool value::contains(const value *  v) const { return (*this) == (*v); }
+
 std::string value::to_str() const  {
     std::ostringstream oss;
     this->stringify(oss);
@@ -64,6 +66,12 @@ value * boolean_value::clone() const {
     return new boolean_value(_value);
 }
 
+bool boolean_value::operator == (const value& v) const
+{
+    if (v.boolean() == NULL) return false;
+    return _value == *(v.boolean());
+}
+
 
 int64_value::int64_value()
     : _value(0)
@@ -73,6 +81,12 @@ int64_value::int64_value()
 int64_value::int64_value(int64_t v)
     : _value(v)
 {
+}
+
+bool int64_value::operator == (const value& v) const
+{
+    if (v.int64() == NULL) return false;
+    return _value == *(v.int64());
 }
 
 std::ostream & int64_value::stringify(std::ostream & os) const
@@ -99,6 +113,13 @@ value * real_value::clone() const {
     return new real_value(_value);
 }
 
+bool real_value::operator == (const value& v) const
+{
+    if (v.real() == NULL) return false;
+    return _value == *(v.real());
+}
+
+
 std::ostream & real_value::stringify(std::ostream & os) const
 {
     os << _value;
@@ -113,6 +134,13 @@ string_value::string_value(const std::string &v)
 value * string_value::clone() const {
     return new string_value(_value);
 }
+
+bool string_value::operator == (const value& v) const
+{
+    if (v.string() == NULL) return false;
+    return _value == *(v.string());
+}
+
 
 std::ostream & string_value::stringify(std::ostream & os) const
 {
@@ -370,6 +398,14 @@ std::ostream & array_value::stringify(std::ostream & os) const {
     return os;
 }
 
+
+bool array_value::operator == (const value& v) const
+{
+    if (v.array() == NULL) return false;
+    return _values == v.array()->_values;
+}
+
+
 object_value::object_value() {
 }
 
@@ -585,6 +621,42 @@ const object_value * object_value::object(const std::string & name) const
 value * object_value::clone() const {
     return new object_value(*this);
 }
+
+bool object_value::operator == (const value& v) const
+{
+    if (v.object() == NULL) return false;
+    return _values == v.object()->_values;
+}
+
+
+bool object_value::empty() const {
+    return _values.empty();
+}
+
+object_value::const_iterator object_value::begin() const { return _values.begin(); };
+object_value::const_iterator object_value::end() const { return _values.end(); }
+
+bool object_value::contains(const value * rhs) const {
+    if (rhs == NULL || rhs->object() == NULL) return false;
+    return contains(*(rhs->object()));
+}
+bool object_value::contains(const object_value & rhs) const {
+    for (json::object_value::const_iterator it = rhs.begin();
+         it != rhs.end();
+         ++it) {
+        const_iterator vit = _values.find(it->first);
+        if (vit == end()) {
+            return false;
+        }
+
+        // NULL not undefined
+        if (vit->second == NULL && it->second != NULL) return false;
+
+        it->second->contains(vit->second);
+    }
+    return true;
+}
+
 
 
 std::ostream & object_value::stringify(std::ostream & os) const {

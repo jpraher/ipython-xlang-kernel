@@ -107,6 +107,30 @@ void ipython_shell_handler_set_handlers(shell_handler_t* s, const handler_table_
 }
 
 
+/* */
+int ipython_raw_input(shell_handler_t * s,
+                      const char * prompt,
+                      char ** value,
+                      int * len
+                      )
+{
+    DLOG(INFO) << "ipython_raw_input" ;
+
+    ExecuteHandler * h = reinterpret_cast<ExecuteHandler*>(s);
+    IPythonShellHandler * ipython_handler = dynamic_cast<IPythonShellHandler*>(h);
+    assert(ipython_handler != NULL);
+
+    try {
+        bool result = ipython_handler->raw_input(prompt, value, len);
+        return result;
+    } catch (const std::exception &e)  {
+        LOG(WARNING) << "input_request failed " << e.what();
+        return false;
+    }
+}
+
+
+
 ioredir_t * new_ioredir_stdout() {
     redirector * red = new redirector(STDOUT_FILENO);
     red->start();

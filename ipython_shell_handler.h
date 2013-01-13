@@ -56,6 +56,10 @@ public:
     void handle_execute_request(EContext & ctx, IPythonMessage * request);
     void handle_shutdown_request(EContext & ctx, IPythonMessage * request);
 
+    bool raw_input(const char * prompt,
+                   char ** value,
+                   int * len);
+
 private:
 
     void _sendStream(EContext & ctx,

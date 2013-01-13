@@ -25,6 +25,7 @@ class SocketChannel : public Channel {
  public:
     SocketChannel(zmq::socket_t & socket, const std::string & key);
     virtual void send(const Message & message);
+    virtual bool recv(Message * message, int timeout = -1);
  private:
     zmq::socket_t * _socket;
     std::string _key;
@@ -89,6 +90,8 @@ public:
     const TCPInfo & endpoint_info() const ;
 
     bool has_shutdown();
+
+    EContext * execution_context();
 
 private:
     scoped_ptr<zmq::context_t> _ctx;     // seperate context

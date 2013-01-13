@@ -44,6 +44,9 @@ namespace json {
         virtual value * clone() const = 0;
         virtual std::ostream & stringify(std::ostream & os) const = 0;
         std::string    to_str() const;
+
+        virtual bool contains(const value* ) const;
+        virtual bool operator == (const value &v) const = 0;
     };
 
     class int64_value : public value {
@@ -58,6 +61,8 @@ namespace json {
         virtual const int64_t * int64() const       { return &_value; }
         virtual std::ostream & stringify(std::ostream & os) const;
         virtual value * clone() const;
+        virtual bool operator == (const value &v) const;
+
     private:
         int64_t _value;
     };
@@ -74,6 +79,8 @@ namespace json {
         virtual const bool * boolean() const       { return &_value; }
         virtual std::ostream & stringify(std::ostream & os) const;
         virtual value * clone() const;
+        virtual bool operator == (const value &v) const;
+
     private:
         bool _value;
     };
@@ -91,6 +98,7 @@ namespace json {
         virtual const double * real() const       { return &_value; }
         virtual std::ostream & stringify(std::ostream & os) const;
         virtual value * clone() const;
+        virtual bool operator == (const value &v) const;
     private:
         double _value;
     };
@@ -106,6 +114,7 @@ namespace json {
         virtual const std::string * string() const       { return &_value; }
         virtual std::ostream & stringify(std::ostream & os) const;
         virtual value * clone() const;
+        virtual bool operator == (const value &v) const;
     private:
         std::string _value;
     };
@@ -145,6 +154,9 @@ namespace json {
 
         virtual std::ostream & stringify(std::ostream & os) const;
         virtual value * clone() const;
+
+        virtual bool operator == (const json::value &v) const;
+
     private:
         value * _get(int el) const;
         void _put(int el, value* v);
@@ -156,7 +168,8 @@ namespace json {
     class object_value : public value {
         friend class array_value;
         typedef std::map<std::string, value*> property_map;
-
+        typedef property_map::iterator iterator;
+        typedef property_map::const_iterator const_iterator;
     public:
         object_value();
         explicit object_value(const object_value & that);
@@ -190,6 +203,19 @@ namespace json {
 
         virtual std::ostream & stringify(std::ostream & os) const;
         virtual value * clone() const;
+        virtual bool contains(const value *obj) const;
+        virtual bool operator == (const value &v) const;
+
+        bool contains(const object_value & obj) const;
+        bool empty() const;
+
+        // iterator begin();
+        // iterator end();
+        const_iterator begin() const;
+        const_iterator end() const;
+
+
+
     private:
         value* _find(const std::string & name) const;
         bool _delete(const std::string & name) ;

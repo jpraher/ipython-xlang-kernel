@@ -44,6 +44,7 @@ class Channel {
 public:
     virtual ~Channel() {}
     virtual void send(const Message& message) = 0;
+    virtual bool recv(Message * message, int timeout = -1) = 0;
 };
 
 class EContext {
@@ -51,11 +52,13 @@ public:
     EContext(const std::string & ident,
              Channel &io,
              Channel &shell,
+             Channel &in,
              redirector & stderr_redir,
              redirector & stdout_redir);
 
     Channel & io();
     Channel & shell();
+    Channel & in();
 
     typedef std::string (EContext::*get_string_t)();
 
@@ -70,6 +73,7 @@ private:
     std::string _ident;
     Channel * _io;
     Channel * _shell;
+    Channel * _in;
     redirector *_stdout_redir;
     redirector *_stderr_redir;
 };

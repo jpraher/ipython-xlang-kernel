@@ -155,6 +155,7 @@ void IPythonShellHandler::handle_execute_request(EContext & ctx,
         code = code.substr(0, code.size() - 1);
     }
 
+
     if (!silent) {
         IPythonMessage pyin;
         pyin.idents.push_back(_topic(ctx.ident(), "pyin"));
@@ -185,7 +186,8 @@ void IPythonShellHandler::handle_execute_request(EContext & ctx,
     execute_request.content_json_string = content_string.c_str();
     execute_response->status = StatusError;
     if (_handlers.execute_request != NULL) {
-        _handlers.execute_request(_handlers.context,
+        _handlers.execute_request((shell_handler_t*)this,
+                                  _handlers.context,
                                   &execute_request,
                                   execute_response.get());
     }
@@ -349,4 +351,50 @@ void IPythonShellHandler::execute(EContext & ctx,
     else {
         handle_generic(ctx, request);
     }
+}
+
+bool IPythonShellHandler::raw_input(const char * prompt,
+                                    char ** value,
+                                    int * len)
+{
+    DLOG(INFO) << "IPythonShellHandler::raw_input()";
+    google::FlushLogFiles(google::INFO);
+    IPythonMessage request;
+
+    EContext * context = _kernel->execution_context();
+    assert(context != NULL);
+
+    Channel & channel = context->in();
+    request.header.set_string("msg_type", "input_request");
+    request.header.set_string("msg_id", _generate_uuid());
+    //request.header.set_string("username", ...);
+    request.header.set_string("session", context->session_id());
+    request.content.set_string("prompt", prompt);
+
+    DLOG(INFO) << "REQUEST header>" <<  request.header.to_str() ;
+    DLOG(INFO) << "REQUEST content>" <<  request.content.to_str() ;
+    DLOG(INFO) << "REQUEST metadata>" <<  request.metadata.to_str() ;
+
+    channel.send(request);
+    IPythonMessage response;
+    // response.parent.merge(request.header);
+    DLOG(INFO) << "Waiting for response";
+    channel.recv(&response);
+    DLOG(INFO) << "RESPONSE header>" <<  response.header.to_str() ;
+    DLOG(INFO) << "RESPONSE content>" <<  response.content.to_str() ;
+    DLOG(INFO) << "RESPONSE metadata>" <<  response.metadata.to_str() ;
+
+    const std::string * data = response.content.string("value");
+    *value = NULL;
+    *len = 0;
+    if (data) {
+        *value = (char*)malloc(sizeof(char) * data->size() + 1);
+        if (!*value) {
+            return false;
+        }
+        memcpy(*value, data->data(), data->size());
+        *value[data->size()] = '0';
+        *len = data->size();
+    }
+    return true;
 }
